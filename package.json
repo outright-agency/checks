@@ -21,7 +21,11 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "test:installed": "CHECKS_INSTALLED_TESTS=1 vitest run --project installed",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "node bin/outright-checks.mjs check",
+    "verify": "node bin/outright-checks.mjs verify",
+    "verify:chain": "pnpm typecheck && pnpm types:current && pnpm test"
   },
   "peerDependencies": {
     "@testing-library/react": ">=14",
