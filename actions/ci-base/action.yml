@@ -1,0 +1,19 @@
+name: CI base
+description: >-
+  The commit a CI job compares the change with, as <NAME>_RATCHET_BASE_SHA: the ratchets'
+  baselines, a pull request's related app tests and a docs-only reader all read it. Runs on
+  pull_request and merge_group events, after a checkout two commits deep.
+inputs:
+  name:
+    description: The app's name, as its checks.config.mjs gives it.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Ratchet base
+      shell: bash
+      env:
+        CHECKS_NAME: ${{ inputs.name }}
+        PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+        MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
+      run: '"$GITHUB_ACTION_PATH/ratchet-base.sh"'

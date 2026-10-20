@@ -11,5 +11,5 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["bin", "src", "test", "scripts", "*.mjs"]
+  "include": ["actions", "bin", "src", "test", "scripts", "*.mjs"]
 }

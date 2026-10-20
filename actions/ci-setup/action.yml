@@ -1,0 +1,33 @@
+name: CI setup
+description: >-
+  What every CI job that installs needs after its checkout: the base commit (as ci-base writes
+  it), pnpm, Node, and the install.
+inputs:
+  name:
+    description: The app's name, as its checks.config.mjs gives it.
+    required: true
+  node-version:
+    description: The Node version to install.
+    default: "22"
+runs:
+  using: composite
+  steps:
+    # ci-base's own script: a composite action cannot `uses:` a sibling by a relative path, which
+    # would resolve in the calling repository.
+    - name: Ratchet base
+      shell: bash
+      env:
+        CHECKS_NAME: ${{ inputs.name }}
+        PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+        MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
+      run: '"$GITHUB_ACTION_PATH/../ci-base/ratchet-base.sh"'
+    - uses: pnpm/action-setup@v5
+    # No dependency cache: only a push to main, a schedule or a dispatch can save one that pull
+    # requests and queue entries read, and an install from the registry takes about as long as a
+    # restore.
+    - uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+    - name: Install
+      shell: bash
+      run: pnpm install --frozen-lockfile
