@@ -64,13 +64,16 @@ import {
  * @typedef {object} PresetOptions
  * @property {string} configUrl the app's Vitest config, as `import.meta.url`
  * @property {string[]} [exclude] the app's own exclusions, added to node_modules and dot-directories
- * @property {string[]} [setupFiles] the app's own setup files, run after the package's
+ * @property {string[]} [setupFiles] the app's own setup files, run after the package's; a path (`./…`) is also a rerun trigger
  * @property {{ include?: string[], exclude?: string[] }} [app] the `app` project's own include and exclusions
  * @property {TestProjectInlineConfiguration[]} [projects] projects beyond `app` and `ratchets`
  */
 
 export const SETUP_FILE = fileURLToPath(new URL("./setup.mjs", import.meta.url));
 export const SERVER_ONLY_STUB = fileURLToPath(new URL("./server-only.mjs", import.meta.url));
+
+/** @param {string} file */
+const isPath = (file) => file.startsWith(".") || file.startsWith("/");
 
 /** The package's name, as an app installs it: its modules run in each test file's context. */
 const PACKAGE = "@outright/checks";
@@ -105,8 +108,9 @@ export function checksVitestConfig(config, options) {
       server: { deps: { inline: [PACKAGE] } },
       forceRerunTriggers: [
         ...configDefaults.forceRerunTriggers,
-        ...["package.json", "pnpm-lock.yaml", configFile, CONFIG_FILE, ...setupFiles].map((file) =>
-          resolve(root, file)
+        // A setup file given as a package name is not the app's file, and not a trigger.
+        ...["package.json", "pnpm-lock.yaml", configFile, CONFIG_FILE, ...setupFiles.filter(isPath)].map(
+          (file) => resolve(root, file)
         ),
       ],
       exclude: excluded,

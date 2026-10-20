@@ -30,9 +30,9 @@ function installMemoryStorage(target, key) {
       return store.size;
     },
     key: (index) => Array.from(store.keys())[index] ?? null,
-    getItem: (name) => store.get(name) ?? null,
+    getItem: (name) => store.get(String(name)) ?? null,
     setItem: (name, value) => void store.set(String(name), String(value)),
-    removeItem: (name) => void store.delete(name),
+    removeItem: (name) => void store.delete(String(name)),
     clear: () => store.clear(),
   };
 
@@ -56,8 +56,12 @@ if ("window" in globalThis && process.env.CI) {
   try {
     // @ts-ignore — an optional peer dependency: present only in an app that renders in its tests
     testingLibrary = await import("@testing-library/react/pure");
-  } catch {
-    // no Testing Library in this app
+  } catch (error) {
+    // No Testing Library in this app is fine; one that is there and fails to load is not.
+    const missing =
+      /** @type {NodeJS.ErrnoException} */ (error).code === "ERR_MODULE_NOT_FOUND" ||
+      /Failed to (?:load url|resolve import)|Cannot find (?:module|package)/.test(String(error));
+    if (!missing || !String(error).includes("@testing-library/react")) throw error;
   }
   testingLibrary?.configure({ asyncUtilTimeout: CI_ASYNC_UTIL_TIMEOUT_MS });
 }

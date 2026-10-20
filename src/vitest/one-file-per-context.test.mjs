@@ -16,6 +16,8 @@ describe("one test file per VM context", () => {
     expect(() => claimContextForOneFile(context)).toThrow(ONE_FILE_PER_CONTEXT_MESSAGE);
     expect(ONE_FILE_PER_CONTEXT_MESSAGE).toContain("one VM context");
     expect(ONE_FILE_PER_CONTEXT_MESSAGE).toContain("two workers or more");
+    expect(ONE_FILE_PER_CONTEXT_MESSAGE).toContain("--no-file-parallelism");
+    expect(ONE_FILE_PER_CONTEXT_MESSAGE).toContain("VITEST_MAX_WORKERS=1");
   });
 
   it("keeps contexts apart", () => {

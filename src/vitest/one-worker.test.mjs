@@ -33,13 +33,13 @@ function twoFiles(config) {
   }
   writeFileSync(
     join(root, "checks.config.mjs"),
-    'export default { name: "probe", check: { steps: ["tests"] }, verify: { lanes: [{ name: "a", run: "true" }] } };\n'
+    'export default { name: "probe", ratchets: ["ratchets/**/*.test.mjs"], check: { steps: ["tests"] }, verify: { lanes: [{ name: "a", run: "true" }] } };\n'
   );
   writeFileSync(
     join(root, "vitest.config.mjs"),
     config === "bare"
       ? `export default { test: { globals: true, pool: "vmForks", setupFiles: [${JSON.stringify(SETUP_FILE)}] } };\n`
-      : `import { checksVitestConfig } from ${JSON.stringify(PRESET)};\nimport checks from "./checks.config.mjs";\nconst config = checksVitestConfig(checks, { configUrl: import.meta.url });\nconfig.test.globals = true;\ndelete config.test.projects;\nexport default config;\n`
+      : `import { checksVitestConfig } from ${JSON.stringify(PRESET)};\nimport checks from "./checks.config.mjs";\nconst config = checksVitestConfig(checks, { configUrl: import.meta.url });\nconfig.test.globals = true;\nexport default config;\n`
   );
   return root;
 }
@@ -55,6 +55,18 @@ describe("one worker", () => {
     });
     expect(run.status).not.toBe(0);
     expect(`${run.stdout}${run.stderr}`).toContain("Two test files ran in one VM context");
+  }, 20_000);
+
+  it("fails a run the preset cannot floor, naming the flag", () => {
+    const root = twoFiles("preset");
+    const env = cleanEnv();
+    delete env.VITEST_MAX_WORKERS;
+    const run = spawnSync(process.execPath, [VITEST, "run", "--root", root, "--no-file-parallelism"], {
+      env,
+      encoding: "utf8",
+    });
+    expect(run.status).not.toBe(0);
+    expect(`${run.stdout}${run.stderr}`).toContain("this comes from --no-file-parallelism");
   }, 20_000);
 
   it("never shares a context under the preset, which raises the workers to two", () => {

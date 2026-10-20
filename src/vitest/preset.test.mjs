@@ -60,7 +60,7 @@ describe("checksVitestConfig", () => {
     const config = /** @type {any} */ (
       checksVitestConfig(await fixture("single"), {
         configUrl: "file:///tmp/x/.hidden/app/vitest.config.ts",
-        setupFiles: ["./test/setup.ts"],
+        setupFiles: ["./test/setup.ts", "@testing-library/jest-dom/vitest"],
       })
     );
     expect(config.test.forceRerunTriggers).toEqual(
@@ -73,7 +73,8 @@ describe("checksVitestConfig", () => {
       ])
     );
     expect(config.test.forceRerunTriggers).toEqual(expect.arrayContaining(["**/package.json/**"]));
-    expect(config.test.setupFiles).toEqual([SETUP_FILE, "./test/setup.ts"]);
+    expect(config.test.forceRerunTriggers.some((/** @type {string} */ t) => t.includes("jest-dom"))).toBe(false);
+    expect(config.test.setupFiles).toEqual([SETUP_FILE, "./test/setup.ts", "@testing-library/jest-dom/vitest"]);
   });
 
   it("splits app and ratchets by the config's ratchet globs", async () => {
