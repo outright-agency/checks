@@ -16,6 +16,9 @@
     "!src/**/*.test.mjs",
     "!bin/**/*.test.mjs"
   ],
+  "bin": {
+    "outright-checks": "./bin/outright-checks.mjs"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
