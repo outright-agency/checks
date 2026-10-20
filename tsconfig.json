@@ -7,9 +7,23 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "target": "es2022",
-    "lib": ["es2023"],
-    "types": ["node"],
+    "lib": [
+      "es2023"
+    ],
+    "types": [
+      "node"
+    ],
     "skipLibCheck": true
   },
-  "include": ["actions", "bin", "src", "test", "scripts", "*.mjs"]
+  "include": [
+    "actions",
+    "bin",
+    "src",
+    "test",
+    "scripts",
+    "*.mjs"
+  ],
+  "exclude": [
+    "test/installed/app"
+  ]
 }

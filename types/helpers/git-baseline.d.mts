@@ -44,8 +44,9 @@ export function loadGitBaselineExport<T>(baseSha: string, filePath: string, expo
  * A subject may have lived through more than one move, so the pairs are applied until none
  * matches; each pair must move a path strictly toward today's spelling (no pair's `to` leads back
  * to an earlier pair's `from`), so the loop ends. List a longer `from` before a shorter one it
- * starts with. Only a path that starts at the repository's root moves: a nested `src/` inside a
- * package or `node_modules` is left as it is.
+ * starts with. Only a path that starts at the repository's root and sits at least one folder deep
+ * moves: a nested `src/` inside a package or `node_modules` is left as it is, and so is a file at
+ * the root.
  * @param {string} subject
  * @param {readonly MovedRoot[]} movedRoots
  * @returns {string}
@@ -83,4 +84,8 @@ export type GitBaselineOptions = {
     env?: Readonly<Record<string, string | undefined>> | undefined;
     execFile?: ExecFile | undefined;
 };
+/**
+ * A folder or file that moved: `[from, to]`. A folder ends in `/`; a file ends in `.`, which
+ * carries its test with it. Both sit at least one folder deep (`src/…`).
+ */
 export type MovedRoot = readonly [string, string];

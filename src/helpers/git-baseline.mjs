@@ -27,8 +27,11 @@ import { namesOf } from "../config.mjs";
  * @property {ExecFile} [execFile]
  */
 
-/** A folder or file that moved: `[from, to]`. A folder ends in `/`; a file ends in `.`, which carries its test with it. */
-/** @typedef {readonly [string, string]} MovedRoot */
+/**
+ * A folder or file that moved: `[from, to]`. A folder ends in `/`; a file ends in `.`, which
+ * carries its test with it. Both sit at least one folder deep (`src/…`).
+ * @typedef {readonly [string, string]} MovedRoot
+ */
 
 /** @param {{ cwd: string, execFile: ExecFile }} options @param {string[]} args */
 function git(options, args) {
@@ -152,19 +155,35 @@ function escapeRegExp(text) {
  * A subject may have lived through more than one move, so the pairs are applied until none
  * matches; each pair must move a path strictly toward today's spelling (no pair's `to` leads back
  * to an earlier pair's `from`), so the loop ends. List a longer `from` before a shorter one it
- * starts with. Only a path that starts at the repository's root moves: a nested `src/` inside a
- * package or `node_modules` is left as it is.
+ * starts with. Only a path that starts at the repository's root and sits at least one folder deep
+ * moves: a nested `src/` inside a package or `node_modules` is left as it is, and so is a file at
+ * the root.
  * @param {string} subject
  * @param {readonly MovedRoot[]} movedRoots
  * @returns {string}
  */
 export function toCurrentPathSpelling(subject, movedRoots) {
+  return spell(subject, movedRoots, movedPaths(movedRoots));
+}
+
+/**
+ * The paths a subject may hold that a move could reach: any starting at the repository's root
+ * with one of the moved roots' first folders. `null` when nothing moved.
+ * @param {readonly MovedRoot[]} movedRoots
+ */
+function movedPaths(movedRoots) {
   const firstSegments = [...new Set(movedRoots.map(([from]) => from.split("/")[0]))];
-  if (firstSegments.length === 0) return subject;
-  const paths = new RegExp(
-    `(?<![\\w/])(?:${firstSegments.map(escapeRegExp).join("|")})\\/[\\w./-]+`,
-    "g"
-  );
+  if (firstSegments.length === 0) return null;
+  return new RegExp(`(?<![\\w/])(?:${firstSegments.map(escapeRegExp).join("|")})\\/[\\w./-]+`, "g");
+}
+
+/**
+ * @param {string} subject
+ * @param {readonly MovedRoot[]} movedRoots
+ * @param {RegExp | null} paths
+ */
+function spell(subject, movedRoots, paths) {
+  if (paths === null) return subject;
   return subject.replace(paths, (path) => {
     let current = path;
     for (;;) {
@@ -182,6 +201,7 @@ export function toCurrentPathSpelling(subject, movedRoots) {
  */
 export function gitBaseline(config, { movedRoots = [] } = {}) {
   const { env: names } = namesOf(config.name);
+  const paths = movedPaths(movedRoots);
 
   /**
    * The commit to compare the current checkout with. CI supplies it exactly; a local branch falls
@@ -206,7 +226,7 @@ export function gitBaseline(config, { movedRoots = [] } = {}) {
     baselineExistsAtBase,
     loadGitBaselineExport,
     /** @param {string} subject */
-    toCurrentPathSpelling: (subject) => toCurrentPathSpelling(subject, movedRoots),
+    toCurrentPathSpelling: (subject) => spell(subject, movedRoots, paths),
     /**
      * A baseline family keyed by subject, rekeyed in today's spelling.
      * @template T
@@ -216,7 +236,7 @@ export function gitBaseline(config, { movedRoots = [] } = {}) {
     withCurrentPathKeys: (records) =>
       Object.fromEntries(
         Object.entries(records).map(([subject, record]) => [
-          toCurrentPathSpelling(subject, movedRoots),
+          spell(subject, movedRoots, paths),
           record,
         ])
       ),

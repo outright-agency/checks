@@ -72,6 +72,25 @@ describe("check hygiene — the rules can fire", () => {
     expect(scopedGatesReachingTheSuite(scripts, { pathRoots: ["app"] })).toEqual([]);
   });
 
+  it("reads no argument as a path when the app names no roots", () => {
+    expect(scopedGatesReachingTheSuite({ "verify:x": "vitest run /abs/x" }, { pathRoots: [] })).toEqual([
+      { script: "verify:x", command: "vitest run /abs/x" },
+    ]);
+  });
+
+  it("counts no rule a test file declares, whatever its extension", () => {
+    expect(
+      declaredRules({
+        name: "x",
+        files: [
+          { path: "src/test/x/policy.ts", source: 'push({ rule: "real" });' },
+          { path: "src/test/x/policy.test.mjs", source: 'push({ rule: "fixture-only" });' },
+          { path: "src/test/x/policy.test.tsx", source: 'push({ rule: "also-fixture" });' },
+        ],
+      })
+    ).toEqual(["real"]);
+  });
+
   it("writes out every script a script calls", () => {
     expect(expandScript("a", { a: "pnpm b && echo a", b: "pnpm run c", c: "echo c" })).toBe(
       "( ( echo c ) ) && echo a"

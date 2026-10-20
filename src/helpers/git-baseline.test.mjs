@@ -21,11 +21,11 @@ function fakeGit(responses) {
 const MOVED_ROOTS = [
   ["src/components/ui/", "src/shared/ui/"],
   ["src/components/", "src/shared/components/"],
-  ["src/lib/crm/canonical.", "src/modules/crm/_shared/canonical."],
-  ["src/lib/toast.", "src/shared/runtime/toast."],
+  ["src/lib/billing/totals.", "src/modules/billing/_shared/totals."],
+  ["src/lib/notice.", "src/shared/runtime/notice."],
   ["src/lib/", "src/shared/lib/"],
-  ["src/features/", "src/platform/"],
-  ["src/platform/tasks/", "src/capabilities/tasks/"],
+  ["src/old-features/", "src/features/"],
+  ["src/features/todo/", "src/abilities/todo/"],
 ];
 
 const fixture = gitBaseline({ name: "fixture" }, { movedRoots: MOVED_ROOTS });
@@ -110,17 +110,17 @@ describe("historical path spelling", () => {
     expect(fixture.toCurrentPathSpelling("src/components/list/row.tsx")).toBe(
       "src/shared/components/list/row.tsx"
     );
-    expect(fixture.toCurrentPathSpelling("src/lib/toast.test.ts")).toBe("src/shared/runtime/toast.test.ts");
+    expect(fixture.toCurrentPathSpelling("src/lib/notice.test.ts")).toBe("src/shared/runtime/notice.test.ts");
   });
 
   it("spells a subject forward through every move it lived through", () => {
-    expect(fixture.toCurrentPathSpelling("src/features/tasks/data.ts")).toBe(
-      "src/capabilities/tasks/data.ts"
+    expect(fixture.toCurrentPathSpelling("src/old-features/todo/data.ts")).toBe(
+      "src/abilities/todo/data.ts"
     );
   });
 
   it("leaves a path that did not move, and a look-alike prefix, exactly as it was", () => {
-    expect(fixture.toCurrentPathSpelling("src/modules/crm/data.ts")).toBe("src/modules/crm/data.ts");
+    expect(fixture.toCurrentPathSpelling("src/modules/billing/data.ts")).toBe("src/modules/billing/data.ts");
     expect(fixture.toCurrentPathSpelling("src/library/x.ts")).toBe("src/library/x.ts");
     expect(fixture.toCurrentPathSpelling("src/libel.ts")).toBe("src/libel.ts");
   });
@@ -135,22 +135,22 @@ describe("historical path spelling", () => {
 
   // Once a base carries the move the mapping must be inert.
   it("is idempotent — a subject already in today's spelling is untouched", () => {
-    const current = "src/modules/crm/_shared/canonical.ts";
+    const current = "src/modules/billing/_shared/totals.ts";
     expect(fixture.toCurrentPathSpelling(current)).toBe(current);
-    expect(fixture.toCurrentPathSpelling(fixture.toCurrentPathSpelling("src/lib/crm/canonical.ts"))).toBe(
+    expect(fixture.toCurrentPathSpelling(fixture.toCurrentPathSpelling("src/lib/billing/totals.ts"))).toBe(
       current
     );
   });
 
   it("maps every path inside a composite subject", () => {
-    expect(fixture.toCurrentPathSpelling("src/lib/crm/canonical.ts|companies|in")).toBe(
-      "src/modules/crm/_shared/canonical.ts|companies|in"
+    expect(fixture.toCurrentPathSpelling("src/lib/billing/totals.ts|accounts|in")).toBe(
+      "src/modules/billing/_shared/totals.ts|accounts|in"
     );
     expect(fixture.toCurrentPathSpelling("cycle:src/lib/a.ts|src/components/ui/b.tsx")).toBe(
       "cycle:src/shared/lib/a.ts|src/shared/ui/b.tsx"
     );
-    expect(fixture.toCurrentPathSpelling("src/modules/crm/x.ts=>src/lib/y.ts")).toBe(
-      "src/modules/crm/x.ts=>src/shared/lib/y.ts"
+    expect(fixture.toCurrentPathSpelling("src/modules/billing/x.ts=>src/lib/y.ts")).toBe(
+      "src/modules/billing/x.ts=>src/shared/lib/y.ts"
     );
   });
 
@@ -168,20 +168,20 @@ describe("historical path spelling", () => {
   it("rekeys a baseline family by subject and keeps each record", () => {
     expect(
       fixture.withCurrentPathKeys({
-        "src/lib/toast.ts": { reviewed: true },
-        "src/modules/crm/data.ts": { reviewed: false },
+        "src/lib/notice.ts": { reviewed: true },
+        "src/modules/billing/data.ts": { reviewed: false },
       })
     ).toEqual({
-      "src/shared/runtime/toast.ts": { reviewed: true },
-      "src/modules/crm/data.ts": { reviewed: false },
+      "src/shared/runtime/notice.ts": { reviewed: true },
+      "src/modules/billing/data.ts": { reviewed: false },
     });
   });
 
   // Mapping the BASE side forward can only ever say "this was reviewed before": a subject with no
   // record at the base has none under either spelling, so a new risk has nothing to inherit.
   it("gives a genuinely new subject nothing to inherit", () => {
-    const base = fixture.withCurrentPathKeys({ "src/lib/toast.ts": 1 });
+    const base = fixture.withCurrentPathKeys({ "src/lib/notice.ts": 1 });
     expect(base["src/shared/lib/brand-new.ts"]).toBeUndefined();
-    expect(base["src/shared/runtime/toast.ts"]).toBe(1);
+    expect(base["src/shared/runtime/notice.ts"]).toBe(1);
   });
 });

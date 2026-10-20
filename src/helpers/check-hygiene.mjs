@@ -90,7 +90,8 @@ export function scopedGatesReachingTheSuite(
   scripts,
   { notScoped = ["verify:chain"], pathRoots = ["src", "scripts", "packages"] } = {}
 ) {
-  const roots = new RegExp(`^(?:${pathRoots.map(escapeRegExp).join("|")})/`);
+  // No roots: no argument is a path, so every bare `vitest run` reaches the suite.
+  const roots = pathRoots.length > 0 ? new RegExp(`^(?:${pathRoots.map(escapeRegExp).join("|")})/`) : /(?!)/;
   /** @type {SuiteReachFinding[]} */
   const findings = [];
   for (const script of Object.keys(scripts)) {
