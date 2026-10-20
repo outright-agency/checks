@@ -103,7 +103,8 @@ export async function main({ cwd, config }) {
  */
 function hasCommit(git, ref) {
   try {
-    git("rev-parse", "--verify", "--quiet", ref);
+    // `^{commit}`: the object itself must exist, not only a ref that names it.
+    git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`);
     return true;
   } catch {
     return false;
