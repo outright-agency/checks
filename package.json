@@ -1,0 +1,39 @@
+{
+  "name": "@outright/checks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The checks' engine every Outright app installs: the gate runner, the test runner's preset, the helpers and the CI setup steps.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@10.30.2",
+  "files": [
+    "bin",
+    "src",
+    "types",
+    "README.md",
+    "!src/**/*.test.mjs",
+    "!bin/**/*.test.mjs"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@testing-library/react": ">=14",
+    "typescript": ">=5",
+    "vitest": ">=4.1.5 <5"
+  },
+  "peerDependenciesMeta": {
+    "@testing-library/react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
