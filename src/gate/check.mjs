@@ -83,7 +83,8 @@ export async function main({ cwd, config }) {
   const failed = results.filter((entry) => entry.code !== 0);
   for (const output of new Set(failed.map((entry) => entry.output))) {
     for (const result of failed.filter((entry) => entry.output === output)) {
-      console.log(`\n[check] ${result.name} FAILED in ${result.seconds}s`);
+      const command = result.command === undefined ? "" : ` — ${result.command}`;
+      console.log(`\n[check] ${result.name} FAILED in ${result.seconds}s${command}`);
     }
     console.log(`\n${output.trimEnd()}`);
   }

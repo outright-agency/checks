@@ -56,6 +56,13 @@ describe("resolveConfig", () => {
       [config({ verify: { lanes: [{ run: "x" }] } }), "verify.lanes[0] needs a name and a run"],
       [config({ check: { steps: [{ name: "a", run: "x" }, { name: "a", run: "y" }] } }), 'check.steps names "a" twice'],
       [config({ verify: { first: [{ name: "a", run: "x" }], lanes: [{ name: "a", run: "y" }] } }), 'verify names "a" twice'],
+      [config({ check: { steps: [{ name: "app", run: "x" }, "tests"] } }), 'check.steps names "app", the name of one of the tests step\'s lines'],
+      [config({ check: { requires: "x", steps } }), "check.requires must be a list"],
+      [config({ check: { steps, tests: { workerMemory: "" } } }), 'check.tests.workerMemory must be a size, as "512MB"'],
+      [config({ check: { steps, tests: { parentHeapMb: 0.5 } } }), "check.tests.parentHeapMb must be a whole number of megabytes"],
+      [config({ verify: { first: "x", lanes } }), "verify.first must be a list"],
+      [config({ verify: { lanes, chain: "" } }), "verify.chain must be a command"],
+      [config({ verify: { lanes, summary: "Tests" } }), "verify.summary must be a regular expression"],
     ];
     for (const [broken, message] of cases) {
       expect(() => resolveConfig(/** @type {any} */ (broken))).toThrow(
@@ -63,6 +70,15 @@ describe("resolveConfig", () => {
       );
       expect(() => resolveConfig(/** @type {any} */ (broken))).toThrow(`checks.config.mjs: ${message}`);
     }
+    expect(() => resolveConfig(/** @type {any} */ ("x"))).toThrow(
+      "checks.config.mjs: the default export must be the config object"
+    );
+  });
+
+  it("lets a step be named app or ratchets when the check has no tests step", () => {
+    expect(() =>
+      resolveConfig(/** @type {any} */ (config({ check: { steps: [{ name: "app", run: "x" }] } })))
+    ).not.toThrow();
   });
 });
 

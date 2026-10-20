@@ -10,7 +10,8 @@ import { CONFIG_FILE, ChecksConfigError, loadConfig } from "../src/config.mjs";
 const USAGE = "usage: outright-checks <check | verify [--force]>";
 
 const [command, ...rest] = process.argv.slice(2);
-if (command !== "check" && command !== "verify") {
+const known = command === "check" ? [] : command === "verify" ? ["--force"] : null;
+if (known === null || rest.some((argument) => !known.includes(argument))) {
   console.error(USAGE);
   process.exit(2);
 }

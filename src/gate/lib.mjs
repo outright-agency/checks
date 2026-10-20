@@ -105,7 +105,7 @@ export function changedPaths(diffNames, porcelain) {
 /**
  * The steps this change runs, in the app's order. A step whose `run` is a function is asked which
  * command the change needs (`chosen`, and the pass line names it), and sits the change out when
- * it answers `null`.
+ * it answers `null`; any answer that is not a command is a mistake in the config.
  * @param {ResolvedConfig} config
  * @param {string[]} changed
  * @returns {(CommandStep | TestsStep)[]}
@@ -130,9 +130,15 @@ export function checkSteps(config, changed) {
         `check.steps "${step.name}" failed to choose a command: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-    if (command !== null && command !== undefined) {
-      steps.push({ name: step.name, command, chosen: true });
+    if (command === null) continue;
+    if (typeof command !== "string" || command.trim() === "") {
+      // `changed.some(…) && "pnpm x"` answers `false`, and an empty string would pass having run
+      // nothing: either is a mistake in the config, not a step to run.
+      throw new ChecksConfigError(
+        `check.steps "${step.name}" chose no command: got ${JSON.stringify(command)} (return a command, or null to sit the change out)`
+      );
     }
+    steps.push({ name: step.name, command, chosen: true });
   }
   return steps;
 }

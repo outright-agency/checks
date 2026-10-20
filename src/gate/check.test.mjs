@@ -17,7 +17,7 @@ describe("outright-checks check", () => {
   it("runs every step one after another, each even after one failed, and names every failure", () => {
     const root = scratchRepo(
       config(`[
-        { name: "a", run: "echo a >> order.txt; echo one" },
+        { name: "a", run: "sleep 0.3; echo a >> order.txt; echo one" },
         { name: "b", run: "echo b >> order.txt; echo broke; exit 3" },
         { name: "c", run: "echo c >> order.txt; echo three" },
       ]`),
@@ -62,6 +62,26 @@ describe("outright-checks check", () => {
     expect(code).toBe(2);
     expect(output).toContain("[check] checks.config.mjs: unknown key check.stpes");
     expect(existsSync(join(root, "ran.txt"))).toBe(false);
+  });
+
+  it("stops with exit 2 when a step's function throws or chooses no command, before any step runs", () => {
+    for (const [run, message] of [
+      ['() => { throw new Error("x"); }', 'check.steps "b" failed to choose a command: x'],
+      ["({ changed }) => changed.includes('nothing') && 'pnpm x'", 'check.steps "b" chose no command: got false'],
+    ]) {
+      const root = scratchRepo(config(`[{ name: "a", run: "touch ran.txt" }, { name: "b", run: ${run} }]`));
+      const { code, output } = runChecks(root, ["check"]);
+      expect(code).toBe(2);
+      expect(output).toContain(`[check] checks.config.mjs: ${message}`);
+      expect(existsSync(join(root, "ran.txt"))).toBe(false);
+    }
+  });
+
+  it("names the chosen command on a failing step's line too", () => {
+    const root = scratchRepo(config(`[{ name: "pick", run: () => "echo nope; exit 1" }]`));
+    const { code, output } = runChecks(root, ["check"]);
+    expect(code).toBe(1);
+    expect(output).toMatch(/\[check\] pick FAILED in [\d.]+s — echo nope; exit 1\n/);
   });
 
   it("compares a first commit with itself", () => {

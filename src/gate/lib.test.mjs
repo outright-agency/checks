@@ -62,6 +62,20 @@ describe("checkSteps", () => {
     expect(checkSteps(reordered, ["docs/a.md"]).map((step) => step.name)).toEqual(["tests", "types"]);
   });
 
+  it("refuses an answer that is not a command, and lets null sit the change out", async () => {
+    const config = await loadConfig(join(FIXTURES, "single"));
+    for (const [answer, shown] of [[false, "false"], ["", '""'], [0, "0"], ["  ", '"  "']]) {
+      const broken = { ...config, check: { ...config.check, steps: [{ name: "types", run: () => answer }] } };
+      expect(() => checkSteps(/** @type {any} */ (broken), [])).toThrow(
+        new ChecksConfigError(
+          `check.steps "types" chose no command: got ${shown} (return a command, or null to sit the change out)`
+        )
+      );
+    }
+    const sitsOut = { ...config, check: { ...config.check, steps: [{ name: "types", run: () => null }] } };
+    expect(checkSteps(sitsOut, [])).toEqual([]);
+  });
+
   it("names the step whose function threw", async () => {
     const config = await loadConfig(join(FIXTURES, "single"));
     const thrower = () => {

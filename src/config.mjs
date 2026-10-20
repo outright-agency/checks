@@ -226,6 +226,11 @@ export function resolveConfig(config) {
   const stepNames = steps.map((step) => (step === "tests" ? "tests" : step.name));
   const twiceStep = stepNames.find((name, index) => stepNames.indexOf(name) !== index);
   if (twiceStep) refuse(`check.steps names "${twiceStep}" twice`);
+  // The tests step reports one line per project, under the project's name.
+  const reserved = stepNames.find((name) => name === "app" || name === "ratchets");
+  if (reserved && stepNames.includes("tests")) {
+    refuse(`check.steps names "${reserved}", the name of one of the tests step's lines`);
+  }
   const laneNames = [...first, ...lanes].map((lane) => lane.name);
   const twiceLane = laneNames.find((name, index) => laneNames.indexOf(name) !== index);
   if (twiceLane) refuse(`verify names "${twiceLane}" twice`);

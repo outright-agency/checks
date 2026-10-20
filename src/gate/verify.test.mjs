@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, onTestFinished } from "vitest";
 import { git, removeScratchRepos, runChecks, scratchRepo, startChecks } from "../../test/support/scratch-repo.mjs";
@@ -55,6 +55,44 @@ describe("a verify waiting for the lock", () => {
 
     expect(await exited).toBe(expected);
     expect(JSON.parse(readFileSync(ownerPath, "utf8")).pid).toBe(process.pid);
+  });
+});
+
+describe("the tree after the lock", () => {
+  it("tests and records the tree on disk when the lock comes free, not the one it waited with", async () => {
+    // The lock is held by this test process. While the verify waits, a commit moves the tree; the
+    // receipt must name the tree its lanes ran on.
+    const root = scratchRepo(config(`[{ name: "a", run: "true" }]`));
+    const lockDir = join(gateDirectory(".git", root, "fixture-gate"), "lock");
+    mkdirSync(lockDir, { recursive: true });
+    writeFileSync(
+      join(lockDir, "owner.json"),
+      JSON.stringify({ pid: process.pid, checkout: "holder", startedAt: new Date().toISOString() })
+    );
+    const waitedWith = git(root, "rev-parse", "HEAD^{tree}");
+
+    const child = startChecks(root, ["verify"]);
+    onTestFinished(() => {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    });
+    const exited = new Promise((resolve) => child.on("exit", (code) => resolve(code)));
+    let output = "";
+    await new Promise((resolve) => {
+      child.stdout?.on("data", (chunk) => {
+        output += chunk;
+        if (output.includes("waiting for the verify in holder")) resolve(undefined);
+      });
+    });
+    writeFileSync(join(root, "later.txt"), "later\n");
+    git(root, "add", "later.txt");
+    git(root, "commit", "-q", "-m", "later");
+    const tested = git(root, "rev-parse", "HEAD^{tree}");
+    rmSync(lockDir, { recursive: true, force: true });
+
+    expect(await exited).toBe(0);
+    const major = process.versions.node.split(".")[0];
+    expect(receipts(root)).toEqual([`${tested}-node${major}.json`]);
+    expect(tested).not.toBe(waitedWith);
   });
 });
 
