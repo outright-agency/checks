@@ -5,6 +5,12 @@ import { removeScratchRepos, runChecks, scratchRepo } from "../../test/support/s
 
 afterEach(removeScratchRepos);
 
+// Each test builds a scratch repository (three or four `git` calls) and runs the command one to
+// three times, each a Node process that runs git and the steps or lanes in turn: a second or two
+// quiet. On a ten-core machine at a load average of 50 to 100 the receipt test took over 5 s with
+// nothing wrong in it. Each gets 20 s, which covers that and a two-core CI runner.
+const BUDGET_MS = 20_000;
+
 /** A config whose check runs `steps` and whose verify is never called. @param {string} steps */
 const config = (steps, extra = "") => `export default {
   name: "fixture",
@@ -30,7 +36,7 @@ describe("outright-checks check", () => {
     expect(output).toMatch(/\[check\] b FAILED in [\d.]+s/);
     expect(output.indexOf("broke")).toBeGreaterThan(output.indexOf("[check] c passed"));
     expect(readFileSync(join(root, "order.txt"), "utf8")).toBe("a\nb\nc\n");
-  });
+  }, BUDGET_MS);
 
   it("names the command a step chose, and leaves out a step that sits the change out", () => {
     const root = scratchRepo(
@@ -44,7 +50,7 @@ describe("outright-checks check", () => {
     expect(code).toBe(0);
     expect(output).toMatch(/\[check\] pick passed in [\d.]+s — echo picked\n/);
     expect(output).not.toContain("only-docs");
-  });
+  }, BUDGET_MS);
 
   it("stops before running anything when a required file is missing", () => {
     const root = scratchRepo(
@@ -54,7 +60,7 @@ describe("outright-checks check", () => {
     expect(code).toBe(1);
     expect(output).toContain("[check] run pnpm install");
     expect(existsSync(join(root, "ran.txt"))).toBe(false);
-  });
+  }, BUDGET_MS);
 
   it("stops on a config mistake with exit 2", () => {
     const root = scratchRepo(config(`[{ name: "a", run: "touch ran.txt" }]`, `stpes: [],`));
@@ -62,7 +68,7 @@ describe("outright-checks check", () => {
     expect(code).toBe(2);
     expect(output).toContain("[check] checks.config.mjs: unknown key check.stpes");
     expect(existsSync(join(root, "ran.txt"))).toBe(false);
-  });
+  }, BUDGET_MS);
 
   it("stops with exit 2 when a step's function throws or chooses no command, before any step runs", () => {
     for (const [run, message] of [
@@ -75,19 +81,19 @@ describe("outright-checks check", () => {
       expect(output).toContain(`[check] checks.config.mjs: ${message}`);
       expect(existsSync(join(root, "ran.txt"))).toBe(false);
     }
-  });
+  }, BUDGET_MS);
 
   it("names the chosen command on a failing step's line too", () => {
     const root = scratchRepo(config(`[{ name: "pick", run: () => "echo nope; exit 1" }]`));
     const { code, output } = runChecks(root, ["check"]);
     expect(code).toBe(1);
     expect(output).toMatch(/\[check\] pick FAILED in [\d.]+s — echo nope; exit 1\n/);
-  });
+  }, BUDGET_MS);
 
   it("compares a first commit with itself", () => {
     const root = scratchRepo(config(`[{ name: "a", run: "true" }]`));
     const { code, output } = runChecks(root, ["check"]);
     expect(code).toBe(0);
     expect(output).toMatch(/\[check\] a passed/);
-  });
+  }, BUDGET_MS);
 });

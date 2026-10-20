@@ -6,6 +6,12 @@ import { gateDirectory } from "./lib.mjs";
 
 afterEach(removeScratchRepos);
 
+// Each test builds a scratch repository (three or four `git` calls) and runs the command one to
+// three times, each a Node process that runs git and the steps or lanes in turn: a second or two
+// quiet. On a ten-core machine at a load average of 50 to 100 the receipt test took over 5 s with
+// nothing wrong in it. Each gets 20 s, which covers that and a two-core CI runner.
+const BUDGET_MS = 20_000;
+
 /** A config whose verify runs `lanes` (and `first`). @param {string} lanes @param {string} [extra] */
 const config = (lanes, extra = "") => `export default {
   name: "fixture",
@@ -55,7 +61,7 @@ describe("a verify waiting for the lock", () => {
 
     expect(await exited).toBe(expected);
     expect(JSON.parse(readFileSync(ownerPath, "utf8")).pid).toBe(process.pid);
-  });
+  }, BUDGET_MS);
 });
 
 describe("the tree after the lock", () => {
@@ -93,7 +99,7 @@ describe("the tree after the lock", () => {
     const major = process.versions.node.split(".")[0];
     expect(receipts(root)).toEqual([`${tested}-node${major}.json`]);
     expect(tested).not.toBe(waitedWith);
-  });
+  }, BUDGET_MS);
 });
 
 describe("the receipt", () => {
@@ -110,7 +116,7 @@ describe("the receipt", () => {
 
     const forced = runChecks(root, ["verify", "--force"]);
     expect(forced.output).toContain("[verify] a passed");
-  });
+  }, BUDGET_MS);
 
   it("leaves no receipt when the tree moved during the run", () => {
     const moves =
@@ -119,14 +125,14 @@ describe("the receipt", () => {
     const { code } = runChecks(root, ["verify"]);
     expect(code).toBe(0);
     expect(receipts(root)).toEqual([]);
-  });
+  }, BUDGET_MS);
 
   it("leaves no receipt when the run left the tree dirty", () => {
     const root = scratchRepo(config(`[{ name: "dirties", run: "echo x > left-behind.txt" }]`));
     const { code } = runChecks(root, ["verify"]);
     expect(code).toBe(0);
     expect(receipts(root)).toEqual([]);
-  });
+  }, BUDGET_MS);
 
   it("says a dirty tree will leave no receipt", () => {
     const root = scratchRepo(config(`[{ name: "a", run: "true" }]`));
@@ -135,7 +141,7 @@ describe("the receipt", () => {
     expect(code).toBe(0);
     expect(output).toContain("uncommitted changes — this run will not leave a receipt");
     expect(receipts(root)).toEqual([]);
-  });
+  }, BUDGET_MS);
 });
 
 describe("the lanes", () => {
@@ -147,7 +153,7 @@ describe("the lanes", () => {
     expect(code).toBe(1);
     expect(output).toContain("[verify] packages FAILED");
     expect(existsSync(join(root, "marker.txt"))).toBe(false);
-  });
+  }, BUDGET_MS);
 
   it("stops the long lane when a short one fails, and reports it stopped, not failed", () => {
     const root = scratchRepo(
@@ -160,7 +166,7 @@ describe("the lanes", () => {
     expect(output).toContain("[verify] ── short ──");
     expect(output).not.toContain("── suite ──");
     expect(Date.now() - startedAt).toBeLessThan(15_000);
-  });
+  }, BUDGET_MS);
 
   it("reprints the summary lines of a pass, as the app's pattern picks them", () => {
     const root = scratchRepo(
@@ -169,7 +175,7 @@ describe("the lanes", () => {
     const { output } = runChecks(root, ["verify"]);
     expect(output).toContain("  Widget check passed (3 widgets)");
     expect(output).not.toContain("noise");
-  });
+  }, BUDGET_MS);
 
   it("runs the chain under CI", () => {
     const root = scratchRepo(config(`[{ name: "a", run: "touch marker.txt" }]`, `chain: "echo chained",`));
@@ -180,5 +186,5 @@ describe("the lanes", () => {
 
     const failing = scratchRepo(config(`[{ name: "a", run: "true" }]`, `chain: "exit 3",`));
     expect(runChecks(failing, ["verify"], { CI: "1" }).code).toBe(3);
-  });
+  }, BUDGET_MS);
 });
