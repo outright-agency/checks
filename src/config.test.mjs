@@ -75,6 +75,12 @@ describe("resolveConfig", () => {
     );
   });
 
+  it("drops the flags that would make the summary pattern skip lines", () => {
+    const resolved = resolveConfig(/** @type {any} */ (config({ verify: { lanes: [{ name: "a", run: "x" }], summary: /passed/gi } })));
+    expect(resolved.verify.summary.flags).toBe("i");
+    expect(["a passed", "b passed"].filter((line) => resolved.verify.summary.test(line))).toHaveLength(2);
+  });
+
   it("lets a step be named app or ratchets when the check has no tests step", () => {
     expect(() =>
       resolveConfig(/** @type {any} */ (config({ check: { steps: [{ name: "app", run: "x" }] } })))

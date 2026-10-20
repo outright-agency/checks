@@ -49,7 +49,11 @@ export async function main({ cwd, config }) {
 
   /** @param {string[]} args */
   const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8" });
-  const base = hasParent(git) ? "HEAD~1" : "HEAD";
+  if (!hasCommit(git, "HEAD")) {
+    console.log("[check] the repository has no commit yet: the check compares a change with one. Commit, then check again.");
+    return 1;
+  }
+  const base = hasCommit(git, "HEAD~1") ? "HEAD~1" : "HEAD";
   const changed = changedPaths(git("diff", "--name-only", base), git("status", "--porcelain"));
 
   const startedAt = Date.now();
@@ -92,10 +96,14 @@ export async function main({ cwd, config }) {
   return failed.length > 0 ? 1 : 0;
 }
 
-/** A repository with one commit compares the change with HEAD itself. @param {(...args: string[]) => string} git */
-function hasParent(git) {
+/**
+ * Whether `ref` names a commit. A repository with one commit compares the change with HEAD itself.
+ * @param {(...args: string[]) => string} git
+ * @param {string} ref
+ */
+function hasCommit(git, ref) {
   try {
-    git("rev-parse", "--verify", "--quiet", "HEAD~1");
+    git("rev-parse", "--verify", "--quiet", ref);
     return true;
   } catch {
     return false;

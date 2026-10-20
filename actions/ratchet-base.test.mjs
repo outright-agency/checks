@@ -164,4 +164,10 @@ describe("the actions", () => {
       expect(action, file).toMatch(/inputs:\n  name:\n    description: .+\n    required: true\n/);
     }
   });
+
+  it("ci-setup finds the base unless a job on another event turns it off", () => {
+    const action = readFileSync(join(ACTIONS, "ci-setup/action.yml"), "utf8");
+    expect(action).toMatch(/  ratchet-base:\n    description: >-\n[\s\S]+?\n    default: "true"\n/);
+    expect(action).toContain("- name: Ratchet base\n      if: ${{ inputs.ratchet-base != 'false' }}\n");
+  });
 });

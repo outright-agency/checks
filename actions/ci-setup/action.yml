@@ -9,12 +9,19 @@ inputs:
   node-version:
     description: The Node version to install.
     default: "22"
+  ratchet-base:
+    description: >-
+      Whether to find the base commit first: "true" on pull_request and merge_group jobs, where a
+      base that cannot be named stops the job; "false" for a job on any other event (a push, a
+      dispatch), which then has no <NAME>_RATCHET_BASE_SHA.
+    default: "true"
 runs:
   using: composite
   steps:
     # ci-base's own script: a composite action cannot `uses:` a sibling by a relative path, which
     # would resolve in the calling repository.
     - name: Ratchet base
+      if: ${{ inputs.ratchet-base != 'false' }}
       shell: bash
       env:
         CHECKS_NAME: ${{ inputs.name }}

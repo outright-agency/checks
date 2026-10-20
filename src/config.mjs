@@ -237,8 +237,10 @@ export function resolveConfig(config) {
 
   const chain = verify.chain ?? DEFAULT_CHAIN;
   if (!isText(chain)) refuse("verify.chain must be a command");
-  const summary = verify.summary ?? DEFAULT_SUMMARY;
-  if (!(summary instanceof RegExp)) refuse("verify.summary must be a regular expression");
+  const given = verify.summary ?? DEFAULT_SUMMARY;
+  if (!(given instanceof RegExp)) refuse("verify.summary must be a regular expression");
+  // `g` and `y` make `test()` remember where it stopped, so a line after a match would be skipped.
+  const summary = new RegExp(given.source, given.flags.replace(/[gy]/g, ""));
 
   return {
     name: config.name,

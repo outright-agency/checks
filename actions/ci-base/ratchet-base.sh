@@ -12,6 +12,7 @@
 #
 # Reads CHECKS_NAME, GITHUB_EVENT_NAME, PULL_REQUEST_BASE, MERGE_GROUP_BASE and GITHUB_ENV.
 set -euo pipefail
+: "${GITHUB_ENV:?ci-base writes the base to GITHUB_ENV, which only a GitHub Actions job sets}"
 
 if [ -z "${CHECKS_NAME:-}" ]; then
   echo "::error::ci-base needs the app's name (the name in its checks.config.mjs)"

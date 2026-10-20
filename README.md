@@ -16,8 +16,8 @@ pnpm add -D github:outright-agency/checks#v0.1.0
 
 - Node 22.12 or later: the package is ES modules only, and an app without `"type": "module"`
   loads it through Node's `require(esm)`.
-- Peer dependencies: `vitest` 4.1.5 or later (below 5), `typescript` 5 or later (for
-  `git-baseline`), and, optionally, `@testing-library/react`.
+- Peer dependencies: `vitest` 4.1.5 or later (below 5); optionally `typescript` 5 or later (for
+  `git-baseline`) and `@testing-library/react`.
 - No build step: what is in the repository is what runs, with its declarations in `types/`.
 - TypeScript finds the declarations through `exports`, so the app's `moduleResolution` is
   `bundler`, `node16` or `nodenext`; importing `checks.config.mjs` from TypeScript needs `allowJs`.
@@ -69,6 +69,9 @@ What `name` derives:
 | `node_modules/.cache/my-app-gate/analysis/` | the analysis cache |
 | `MY_APP_GATE_NO_CACHE=1` | turns the analysis cache off for one run |
 | `MY_APP_RATCHET_BASE_SHA` | the base commit CI hands the ratchets (`ci-base` writes it) |
+
+The paths a step function receives are relative to the repository's root. The `"tests"` step runs
+the `app` and `ratchets` projects, so the app's Vitest config is built on the preset (below).
 
 A mistake in the config (an unknown key, a missing name, a step with no `run`, a step function
 that throws or answers anything but a command or `null`) stops the command before it runs
@@ -125,7 +128,8 @@ export default mergeConfig(
   are floored at two (a `VITEST_MAX_WORKERS` below two is raised), four by default, and recycle at
   1 GB. The setup file fails a run that still puts two files in one context
   (`--no-file-parallelism`, `--maxWorkers=1`) and says why.
-- **Time.** 5 s a test, 15 s under `CI`. Testing Library's waits get 3 s under `CI`.
+- **Time.** 5 s a test, 15 s under `CI`. Testing Library's waits get 3 s under `CI` (1 s, its
+  own default, elsewhere).
 - **Reruns.** `--changed` reruns every test when `package.json`, the lockfile, the Vitest config,
   `checks.config.mjs` or an app setup file changed. They are named by absolute path, so a checkout
   inside a dot-directory matches too.
@@ -191,5 +195,7 @@ steps:
 - **`ci-base`** (`name`): writes the commit the change is compared with, as
   `<NAME>_RATCHET_BASE_SHA`: a pull request's test merge's first parent, or a merge queue entry's
   base. Any other event, or a base it cannot name or fetch, stops the job.
-- **`ci-setup`** (`name`, `node-version`, default `22`): the base, as `ci-base` writes it, then
-  pnpm, Node and `pnpm install --frozen-lockfile`.
+- **`ci-setup`** (`name`, `node-version`, default `22`, `ratchet-base`, default `"true"`): the
+  base, as `ci-base` writes it, then pnpm, Node and `pnpm install --frozen-lockfile`. A job on an
+  event other than a pull request or the merge queue (a push, a dispatch) has no base to find:
+  give it `ratchet-base: "false"`.

@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { removeScratchRepos, runChecks, scratchRepo } from "../../test/support/scratch-repo.mjs";
+import { git, removeScratchRepos, runChecks, scratchRepo } from "../../test/support/scratch-repo.mjs";
 
 afterEach(removeScratchRepos);
 
@@ -88,6 +88,16 @@ describe("outright-checks check", () => {
     const { code, output } = runChecks(root, ["check"]);
     expect(code).toBe(1);
     expect(output).toMatch(/\[check\] pick FAILED in [\d.]+s — echo nope; exit 1\n/);
+  }, BUDGET_MS);
+
+  it("says what to do in a repository with no commit", () => {
+    const root = scratchRepo(config(`[{ name: "a", run: "touch ran.txt" }]`));
+    rmSync(join(root, ".git"), { recursive: true, force: true });
+    git(root, "init", "-q", "-b", "main");
+    const { code, output } = runChecks(root, ["check"]);
+    expect(code).toBe(1);
+    expect(output).toContain("[check] the repository has no commit yet");
+    expect(existsSync(join(root, "ran.txt"))).toBe(false);
   }, BUDGET_MS);
 
   it("compares a first commit with itself", () => {
