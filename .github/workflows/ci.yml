@@ -42,7 +42,8 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile
-      - name: Git identity for the fixture app's commits
+      # The test helper names its own committer; this covers any git command outside it.
+      - name: Git identity
         run: |
           git config --global user.name "checks-ci"
           git config --global user.email "checks-ci@users.noreply.github.com"

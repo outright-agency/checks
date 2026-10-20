@@ -17,9 +17,13 @@ if [ -z "${CHECKS_NAME:-}" ]; then
   echo "::error::ci-base needs the app's name (the name in its checks.config.mjs)"
   exit 1
 fi
+if ! printf '%s' "$CHECKS_NAME" | grep -Eq '^[a-z][a-z0-9-]*$'; then
+  echo "::error::the app's name must be lower-case letters, digits and dashes, starting with a letter: got ${CHECKS_NAME}"
+  exit 1
+fi
 variable="$(printf '%s' "$CHECKS_NAME" | tr 'a-z-' 'A-Z_')_RATCHET_BASE_SHA"
 
-case "$GITHUB_EVENT_NAME" in
+case "${GITHUB_EVENT_NAME:-}" in
   pull_request)
     if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then
       echo "::error::the pull request's checkout is not its test merge commit"
@@ -32,7 +36,7 @@ case "$GITHUB_EVENT_NAME" in
     ;;
   merge_group) base=${MERGE_GROUP_BASE:-} ;;
   *)
-    echo "::error::no ratchet base for a ${GITHUB_EVENT_NAME} event"
+    echo "::error::no ratchet base for a ${GITHUB_EVENT_NAME:-missing} event"
     exit 1
     ;;
 esac

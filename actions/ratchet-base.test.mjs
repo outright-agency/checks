@@ -128,6 +128,14 @@ describe("ratchet-base.sh", () => {
     expect(run.written).toBe(`MY_APP_RATCHET_BASE_SHA=${old}\n`);
   }, BUDGET_MS);
 
+  it("refuses a name the config would refuse", () => {
+    const { root, base } = testMerge();
+    const run = ratchetBase(root, { GITHUB_EVENT_NAME: "merge_group", MERGE_GROUP_BASE: base, CHECKS_NAME: "My.App" });
+    expect(run.code).toBe(1);
+    expect(run.output).toContain("::error::the app's name must be lower-case letters, digits and dashes");
+    expect(run.written).toBe("");
+  }, BUDGET_MS);
+
   it("refuses to run without the app's name", () => {
     const { root, base } = testMerge();
     const run = ratchetBase(root, { GITHUB_EVENT_NAME: "merge_group", MERGE_GROUP_BASE: base, CHECKS_NAME: "" });
@@ -145,11 +153,11 @@ describe("ratchet-base.sh", () => {
 describe("the actions", () => {
   it("ci-setup passes both event bases and the name through to the script", () => {
     for (const [file, script] of [
-      ["ci-base/action.yml", '"$GITHUB_ACTION_PATH/ratchet-base.sh"'],
-      ["ci-setup/action.yml", '"$GITHUB_ACTION_PATH/../ci-base/ratchet-base.sh"'],
+      ["ci-base/action.yml", 'bash "$GITHUB_ACTION_PATH/ratchet-base.sh"'],
+      ["ci-setup/action.yml", 'bash "$GITHUB_ACTION_PATH/../ci-base/ratchet-base.sh"'],
     ]) {
       const action = readFileSync(join(ACTIONS, file), "utf8");
-      expect(action, file).toContain(`run: '${script}'`);
+      expect(action, file).toContain(`run: ${script}`);
       expect(action, file).toContain("CHECKS_NAME: ${{ inputs.name }}");
       expect(action, file).toContain("PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}");
       expect(action, file).toContain("MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}");

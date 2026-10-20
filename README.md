@@ -19,6 +19,9 @@ pnpm add -D github:outright-agency/checks#v0.1.0
 - Peer dependencies: `vitest` 4.1.5 or later (below 5), `typescript` 5 or later (for
   `git-baseline`), and, optionally, `@testing-library/react`.
 - No build step: what is in the repository is what runs, with its declarations in `types/`.
+- TypeScript finds the declarations through `exports`, so the app's `moduleResolution` is
+  `bundler`, `node16` or `nodenext`; importing `checks.config.mjs` from TypeScript needs `allowJs`.
+  A Next.js app has both.
 
 To take a new version, raise the tag in `package.json` and let the app's own gate pass on it.
 

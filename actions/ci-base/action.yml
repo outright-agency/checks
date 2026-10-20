@@ -16,4 +16,4 @@ runs:
         CHECKS_NAME: ${{ inputs.name }}
         PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
         MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
-      run: '"$GITHUB_ACTION_PATH/ratchet-base.sh"'
+      run: bash "$GITHUB_ACTION_PATH/ratchet-base.sh"

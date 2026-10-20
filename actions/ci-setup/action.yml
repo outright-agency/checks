@@ -20,7 +20,7 @@ runs:
         CHECKS_NAME: ${{ inputs.name }}
         PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
         MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
-      run: '"$GITHUB_ACTION_PATH/../ci-base/ratchet-base.sh"'
+      run: bash "$GITHUB_ACTION_PATH/../ci-base/ratchet-base.sh"
     - uses: pnpm/action-setup@v5
     # No dependency cache: only a push to main, a schedule or a dispatch can save one that pull
     # requests and queue entries read, and an install from the registry takes about as long as a
