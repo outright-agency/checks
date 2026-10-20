@@ -1,0 +1,10 @@
+{
+  "name": "fixture-app",
+  "private": true,
+  "scripts": {
+    "check": "outright-checks check",
+    "verify": "outright-checks verify",
+    "verify:chain": "pnpm exec tsc --noEmit -p . && vitest run",
+    "test": "vitest run"
+  }
+}
