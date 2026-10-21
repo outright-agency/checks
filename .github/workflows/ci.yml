@@ -1,0 +1,64 @@
+name: CI
+
+# The package's own gate: its verify (on CI, the chain: types, declarations current, the suite) on
+# both supported Node lines; the package installed from git into a fixture app, as an app installs
+# it; and, on a pull request, its own ci-setup action run for real.
+on:
+  push:
+  pull_request:
+
+# A newer push replaces the run in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+
+  installed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      # The test helper names its own committer; this covers any git command outside it.
+      - name: Git identity
+        run: |
+          git config --global user.name "checks-ci"
+          git config --global user.email "checks-ci@users.noreply.github.com"
+      - run: pnpm test:installed
+
+  action:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - uses: ./actions/ci-setup
+        with:
+          name: checks
+      - name: The base commit is in the checkout
+        run: git cat-file -e "${CHECKS_RATCHET_BASE_SHA}^{commit}"

@@ -1,0 +1,86 @@
+{
+  "name": "@outright/checks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The checks' engine every Outright app installs: the gate runner, the test runner's preset, the helpers and the CI setup steps.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@10.30.2",
+  "files": [
+    "bin",
+    "src",
+    "types",
+    "README.md",
+    "!src/**/*.test.mjs",
+    "!bin/**/*.test.mjs"
+  ],
+  "bin": {
+    "outright-checks": "./bin/outright-checks.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/config.d.mts",
+      "default": "./src/config.mjs"
+    },
+    "./vitest": {
+      "types": "./types/vitest/preset.d.mts",
+      "default": "./src/vitest/preset.mjs"
+    },
+    "./vitest/setup": {
+      "types": "./types/vitest/setup.d.mts",
+      "default": "./src/vitest/setup.mjs"
+    },
+    "./vitest/server-only": {
+      "types": "./types/vitest/server-only.d.mts",
+      "default": "./src/vitest/server-only.mjs"
+    },
+    "./analysis-cache": {
+      "types": "./types/helpers/analysis-cache.d.mts",
+      "default": "./src/helpers/analysis-cache.mjs"
+    },
+    "./check-hygiene": {
+      "types": "./types/helpers/check-hygiene.d.mts",
+      "default": "./src/helpers/check-hygiene.mjs"
+    },
+    "./git-baseline": {
+      "types": "./types/helpers/git-baseline.d.mts",
+      "default": "./src/helpers/git-baseline.mjs"
+    },
+    "./ratchets": {
+      "types": "./types/helpers/ratchets.d.mts",
+      "default": "./src/helpers/ratchets.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:installed": "CHECKS_INSTALLED_TESTS=1 vitest run --project installed",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "node bin/outright-checks.mjs check",
+    "verify": "node bin/outright-checks.mjs verify",
+    "verify:chain": "pnpm typecheck && pnpm types:current && pnpm test",
+    "types": "tsc -p tsconfig.types.json",
+    "types:current": "node scripts/types-current.mjs"
+  },
+  "peerDependencies": {
+    "@testing-library/react": ">=14",
+    "typescript": ">=5",
+    "vitest": ">=4.1.5 <5"
+  },
+  "peerDependenciesMeta": {
+    "@testing-library/react": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
