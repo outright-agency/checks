@@ -1,6 +1,6 @@
 {
   "name": "@outright/checks",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "The checks' engine every Outright app installs: the gate runner, the test runner's preset, the helpers and the CI setup steps.",
   "license": "UNLICENSED",
@@ -52,6 +52,10 @@
     "./ratchets": {
       "types": "./types/helpers/ratchets.d.mts",
       "default": "./src/helpers/ratchets.mjs"
+    },
+    "./tests-check": {
+      "types": "./types/tests-check/index.d.mts",
+      "default": "./src/tests-check/index.mjs"
     },
     "./package.json": "./package.json"
   },

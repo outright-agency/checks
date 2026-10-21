@@ -2,6 +2,7 @@
 import { readdirSync } from "node:fs";
 import { gitBaseline } from "@outright/checks/git-baseline";
 import { runRatchets } from "@outright/checks/ratchets";
+import { analyzeTests, evaluateTests, formatTestsFindings } from "@outright/checks/tests-check";
 import checks from "../checks.config.mjs";
 import { cachedAnalysis } from "../src/test/checks";
 
@@ -16,5 +17,15 @@ process.exitCode = runRatchets({
     const spelled = toCurrentPathSpelling("src/old/sum.ts");
     console.log(`Files ratchet passed (${files.length} files, ${spelled}, ${checks.name}).`);
     return spelled === "src/sum.ts";
+  },
+  tests: () => {
+    // The tests check, with TypeScript resolved from the app.
+    const { findings, checked } = evaluateTests(analyzeTests({ roots: ["src"] }));
+    if (findings.length > 0) {
+      console.error(`Tests ratchet failed:\n\n${formatTestsFindings(findings).join("\n")}`);
+      return false;
+    }
+    console.log(`Tests ratchet passed (${checked.files} test files, ${checked.jsdomFiles} in a DOM).`);
+    return true;
   },
 });
