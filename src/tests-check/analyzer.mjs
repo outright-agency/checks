@@ -47,6 +47,8 @@ export function environmentOf(source) {
  * @returns {boolean}
  */
 export function isSuiteTest(path, { skip } = {}) {
+  // A global or sticky pattern carries its position from one path to the next.
+  if (skip) skip.lastIndex = 0;
   return TEST_FILE.test(path) && !DOT_FOLDER.test(path) && !(skip?.test(path) ?? false);
 }
 

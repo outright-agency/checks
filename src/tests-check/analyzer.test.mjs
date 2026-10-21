@@ -102,5 +102,11 @@ describe("the tests check's discovery", () => {
     expect(isSuiteTest("src/a.db.test.ts", { skip: /\.db\.test\.ts$/ })).toBe(false);
     expect(isSuiteTest(".worktrees/x/src/a.test.ts")).toBe(false);
     expect(isSuiteTest("src/.cache/a.test.ts")).toBe(false);
+    // A global pattern answers every path the same, wherever the last one left it.
+    const global = /\.db\.test\.ts$/g;
+    expect(["src/a.db.test.ts", "src/b.db.test.ts"].map((path) => isSuiteTest(path, { skip: global }))).toEqual([
+      false,
+      false,
+    ]);
   });
 });

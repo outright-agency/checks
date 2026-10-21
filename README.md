@@ -230,11 +230,11 @@ describe("tests check (live)", () => {
 ```
 
 - **`analyzeTests({ root?, roots?, skip? })`** reads, as text, every test file
-  (`*.test.{ts,tsx,js,jsx,mjs,cjs}`) under `roots` (default `["src", "scripts"]`) that git sees,
+  (`*.test.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) under `roots` (default `["src", "scripts"]`) that git sees,
   tracked or untracked and not ignored, so a planted test goes red before it is committed. A path
   under a dot-folder is a copy, never read; `skip` names tests the app runs under another config.
   Each file carries its environment, read as Vitest reads it: the first `@vitest-environment`
-  docblock anywhere in the file.
+  docblock anywhere in the file; a file with none is `node`, the preset's environment.
 - **`evaluateTests(analysis, baseline?)`** parses only the files whose text could hold a finding,
   and returns `{ findings, checked }`; `checked` counts the files, the DOM files, the parsed
   files, the budgets and the waits, for the live test's floors.
