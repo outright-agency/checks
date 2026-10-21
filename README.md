@@ -15,7 +15,7 @@ verify` before a change lands, a Vitest preset, and the CI steps. An app install
 pinned to a tag:
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.1.0
+pnpm add -D github:outright-agency/checks#v0.2.0
 ```
 
 and declares its own checks in `checks.config.mjs` at its root:
@@ -35,13 +35,13 @@ The sections below cover each part in full.
 ## Install
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.1.0
+pnpm add -D github:outright-agency/checks#v0.2.0
 ```
 
 - Node 22.12 or later: the package is ES modules only, and an app without `"type": "module"`
   loads it through Node's `require(esm)`.
 - Peer dependencies: `vitest` 4.1.5 or later (below 5); optionally `typescript` 5 or later (for
-  `git-baseline`) and `@testing-library/react`.
+  `git-baseline` and the tests check) and `@testing-library/react`.
 - No build step: what is in the repository is what runs, with its declarations in `types/`.
 - TypeScript finds the declarations through `exports`, so the app's `moduleResolution` is
   `bundler`, `node16` or `nodenext`; importing `checks.config.mjs` from TypeScript needs `allowJs`.
@@ -203,6 +203,61 @@ export const { resolveRatchetBase, loadGitBaselineExport, withCurrentPathKeys } 
   or one with `--only <name>`. The app's ratchets command ends
   `process.exitCode = runRatchets({ … })`.
 
+## The tests check
+
+`@outright/checks/tests-check` reads every test an app's suite runs and holds the parts of a
+fast-test standard a machine can: tests that sleep, wait their own way, leave the process changed,
+or carry a budget with no reason beside it. The rest of such a standard (which kind of test proves
+a behaviour, what a test imports) is judgment and stays the app's prose.
+
+```ts
+// src/test/tests/live.test.ts
+import { analyzeTests, evaluateTests, formatTestsFindings } from "@outright/checks/tests-check";
+import { describe, expect, it } from "vitest";
+
+const analysis = analyzeTests({ roots: ["src", "scripts"], skip: /\.e2e\.test\.ts$/ });
+const { findings, checked } = evaluateTests(analysis);
+
+describe("tests check (live)", () => {
+  it("reads every test the suite runs, non-vacuously", () => {
+    expect(checked.files).toBeGreaterThan(30);
+  });
+
+  it("keeps the tests standard", () => {
+    expect(formatTestsFindings(findings)).toEqual([]);
+  });
+});
+```
+
+- **`analyzeTests({ root?, roots?, skip? })`** reads, as text, every test file
+  (`*.test.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) under `roots` (default `["src", "scripts"]`) that git sees,
+  tracked or untracked and not ignored, so a planted test goes red before it is committed. A path
+  under a dot-folder is a copy, never read; `skip` names tests the app runs under another config.
+  Each file carries its environment, read as Vitest reads it: the first `@vitest-environment`
+  docblock anywhere in the file; a file with none is `node`, the preset's environment.
+- **`evaluateTests(analysis, baseline?)`** parses only the files whose text could hold a finding,
+  and returns `{ findings, checked }`; `checked` counts the files, the DOM files, the parsed
+  files, the budgets and the waits, for the live test's floors.
+- **`formatTestsFindings(findings)`** prints one `path:line rule: text` line per finding.
+
+The rules (`TESTS_RULES`), each read from the syntax tree, not one spelling of it:
+
+| Rule | Fires on | Instead |
+| --- | --- | --- |
+| `env-written` | `process.env` assigned, deleted, or written by `Object.assign` / `Reflect` | `vi.stubEnv(name, value)`, `vi.stubEnv(name, undefined)` to unset |
+| `env-unrestored` | a file that stubs the environment and never calls `vi.unstubAllEnvs` | `afterEach(() => vi.unstubAllEnvs())` |
+| `process-chdir` | `process.chdir(…)` | hand the directory to what runs (`cwd`) |
+| `real-clock-sleep` | a promise resolved by a real timer with a delay, `timers/promises`' `setTimeout` included | wait for the event, or drive fake timers |
+| `wait-own-timeout` | a wait (`waitFor`, `findBy*`, `vi.waitFor`) with a timeout of its own | the suite's timeout; make the work before the event faster |
+| `vi-wait-in-dom` | `vi.waitFor` / `vi.waitUntil` in a DOM test | Testing Library's `waitFor`, whose timeout the preset lengthens on CI |
+| `wait-for-absence` | a wait for a mock not to have been called | assert the absence after the event that would have caused it |
+| `budget-without-reason` | a test's, a suite's or a hook's own budget with no comment above it, opening its body, or naming its number | a comment saying what it builds and how the number was sized |
+| `stale-debt` | a debt entry the tree has fewer findings of than it names | lower the entry, or remove it |
+
+Reviewed debt is exact: `{ debt: [{ path, rule, count, issue, reason }] }`, `count` findings of
+`rule` in `path`. A file with more findings than its entry names reports them all, so the new one
+shows; an app with no debt passes no baseline.
+
 ## The CI steps
 
 ```yaml
@@ -210,7 +265,7 @@ steps:
   - uses: actions/checkout@v7
     with:
       fetch-depth: 2
-  - uses: outright-agency/checks/actions/ci-setup@v0.1.0
+  - uses: outright-agency/checks/actions/ci-setup@v0.2.0
     with:
       name: my-app
   - run: pnpm exec vitest run --project app --changed "$MY_APP_RATCHET_BASE_SHA"

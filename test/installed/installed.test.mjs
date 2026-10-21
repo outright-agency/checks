@@ -84,6 +84,7 @@ describe("the package, installed from git", () => {
   it("loads the helpers and the config under tsx in an app without a module type", () => {
     const { code, output } = inApp("pnpm", ["exec", "tsx", "scripts/ratchets.ts"]);
     expect(output).toContain("Files ratchet passed (3 files, src/sum.ts, fixture-app).");
+    expect(output).toContain("Tests ratchet passed (4 test files, 1 in a DOM).");
     expect(code).toBe(0);
   }, RUN_BUDGET_MS);
 
