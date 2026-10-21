@@ -5,8 +5,8 @@
 The tests check, `@outright/checks/tests-check`:
 
 - `analyzeTests({ root, roots, skip })`: every test file under the app's roots that git sees, with
-  its environment read as Vitest reads it.
-- `evaluateTests(analysis, baseline?)` and nine rules: `env-written`, `env-unrestored`,
+  its environment read as Vitest reads it (`environmentOf`, `isSuiteTest`).
+- `evaluateTests(analysis, baseline?)`, `formatTestsFindings` and nine rules (`TESTS_RULES`): `env-written`, `env-unrestored`,
   `process-chdir`, `real-clock-sleep`, `wait-own-timeout`, `vi-wait-in-dom`, `wait-for-absence`,
   `budget-without-reason` and `stale-debt`, each with a fixture that makes it fire. Reviewed debt
   is exact; no baseline means no debt.
