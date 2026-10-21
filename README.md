@@ -8,6 +8,30 @@ an app.
 An improvement to the checks is made here once and reaches an app when it raises its version,
 through its own gate, so a bad version breaks nothing everywhere at once.
 
+## Quick start
+
+`@outright/checks` runs an app's checks: `outright-checks check` after every task, `outright-checks
+verify` before a change lands, a Vitest preset, and the CI steps. An app installs it from GitHub,
+pinned to a tag:
+
+```bash
+pnpm add -D github:outright-agency/checks#v0.1.0
+```
+
+and declares its own checks in `checks.config.mjs` at its root:
+
+```js
+import { defineConfig } from "@outright/checks";
+
+export default defineConfig({
+  name: "my-app",
+  check: { steps: [{ name: "types", run: "pnpm exec tsc --noEmit" }, "tests"] },
+  verify: { lanes: [{ name: "suite", run: "pnpm test", long: true }] },
+});
+```
+
+The sections below cover each part in full.
+
 ## Install
 
 ```bash
