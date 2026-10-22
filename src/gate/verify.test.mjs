@@ -26,7 +26,8 @@ const receipts = (root) => {
   return existsSync(directory) ? readdirSync(directory) : [];
 };
 
-describe("a verify waiting for the lock", () => {
+// Windows has no POSIX signals: a child killed there with any of them is simply ended.
+describe.skipIf(process.platform === "win32")("a verify waiting for the lock", () => {
   it.each(/** @type {const} */ ([
     ["SIGHUP", 129],
     ["SIGINT", 130],
@@ -155,7 +156,7 @@ describe("the lanes", () => {
     expect(existsSync(join(root, "marker.txt"))).toBe(false);
   }, BUDGET_MS);
 
-  it("stops the long lane when a short one fails, and reports it stopped, not failed", () => {
+  it.skipIf(process.platform === "win32")("stops the long lane when a short one fails, and reports it stopped, not failed", () => {
     const root = scratchRepo(
       config(`[{ name: "short", run: "echo short broke; exit 1" }, { name: "suite", run: "sleep 30", long: true }]`)
     );
@@ -166,6 +167,17 @@ describe("the lanes", () => {
     expect(output).toContain("[verify] ── short ──");
     expect(output).not.toContain("── suite ──");
     expect(Date.now() - startedAt).toBeLessThan(15_000);
+  }, BUDGET_MS);
+
+  it.runIf(process.platform === "win32")("runs the long lane to its own end on Windows, reported as its own result", () => {
+    const root = scratchRepo(
+      config(`[{ name: "short", run: "echo short broke; exit 1" }, { name: "suite", run: "echo long ran", long: true }]`)
+    );
+    const { code, output } = runChecks(root, ["verify"]);
+    expect(code).toBe(1);
+    expect(output).toContain("[verify] suite passed");
+    expect(output).not.toContain("stopped");
+    expect(output).toContain("[verify] ── short ──");
   }, BUDGET_MS);
 
   it("reprints the summary lines of a pass, as the app's pattern picks them", () => {

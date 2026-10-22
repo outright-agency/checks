@@ -17,6 +17,10 @@
 //
 // CI has neither: a runner has no neighbours and no memory. Under `CI` this runs the chain,
 // streamed.
+//
+// Windows has no process groups and no POSIX signals, so there a lane runs to its own end: a red
+// short lane does not stop the long one, and Ctrl-C reaches the lanes through the console they
+// share with this process.
 
 import { execFileSync, spawn } from "node:child_process";
 import {
@@ -39,6 +43,7 @@ import {
   isStaleLock,
   receiptKey,
 } from "./lib.mjs";
+import { NO_SHELL, gateShell } from "./shell.mjs";
 
 /** @typedef {import("../config.mjs").ResolvedConfig} ResolvedConfig */
 /** @typedef {import("../config.mjs").Lane} Lane */
@@ -46,6 +51,9 @@ import {
 /** @typedef {{ name: string, stopped: boolean, code: number, seconds: number, output: string }} LaneResult */
 
 const POLL_MS = 2_000;
+
+/** Whether a lane gets a process group of its own, signalled as one: not on Windows, which has none. */
+const GROUPS = process.platform !== "win32";
 const SIGNAL_EXIT_CODES = /** @type {const} */ ({ SIGHUP: 129, SIGINT: 130, SIGTERM: 143 });
 
 /**
@@ -55,6 +63,11 @@ const SIGNAL_EXIT_CODES = /** @type {const} */ ({ SIGHUP: 129, SIGINT: 130, SIGT
 export async function main({ cwd, config, force = false }) {
   /** @param {string[]} args */
   const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  const shell = gateShell();
+  if (shell === null) {
+    console.log(`[verify] ${NO_SHELL}`);
+    return 1;
+  }
 
   // Every child runs in its own process group and is signalled as a group: a lane is
   // pnpm → sh → pnpm → tsc/vitest, and a signal sent to the pnpm at the top alone leaves the rest
@@ -71,6 +84,7 @@ export async function main({ cwd, config, force = false }) {
   for (const [signal, exitCode] of Object.entries(SIGNAL_EXIT_CODES)) {
     process.on(signal, () => {
       if (children.size === 0) process.exit(exitCode);
+      if (!GROUPS) return; // Windows: the lanes share this console, and its Ctrl-C reached them too
       for (const child of children) {
         try {
           process.kill(-(/** @type {number} */ (child.pid)), signal);
@@ -86,7 +100,7 @@ export async function main({ cwd, config, force = false }) {
    * @param {import("node:child_process").StdioOptions} stdio
    */
   function spawnGrouped(script, stdio) {
-    const child = spawn("sh", ["-c", script], { cwd, stdio, detached: true });
+    const child = spawn(/** @type {string} */ (shell), ["-c", script], { cwd, stdio, detached: GROUPS });
     children.add(child);
     child.on("exit", () => children.delete(child));
     return child;
@@ -108,6 +122,7 @@ export async function main({ cwd, config, force = false }) {
   let stopping = false;
 
   function stopLongLanes() {
+    if (!GROUPS) return;
     stopping = true;
     for (const child of longChildren) {
       try {
