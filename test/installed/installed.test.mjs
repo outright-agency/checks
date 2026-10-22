@@ -43,7 +43,10 @@ const INSTALL_BUDGET_MS = 120_000;
 const RUN_BUDGET_MS = 60_000;
 
 beforeAll(() => {
-  app = join(realpathSync(mkdtempSync(join(tmpdir(), "checks-installed-"))), "app");
+  // `.native`: on Windows the temporary folder is spelled by its 8.3 short name (`C:\PROGRA~1`),
+  // which Vite and Vitest spell out, so an app opened by it would see its own files under two
+  // names. A developer's checkout is opened by its own.
+  app = join(realpathSync.native(mkdtempSync(join(tmpdir(), "checks-installed-"))), "app");
   cpSync(FIXTURE, app, { recursive: true });
   const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: PACKAGE_ROOT, encoding: "utf8" }).trim();
   const install = inApp("pnpm", [
