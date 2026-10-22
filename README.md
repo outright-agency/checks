@@ -15,7 +15,7 @@ verify` before a change lands, a Vitest preset, and the CI steps. An app install
 pinned to a tag:
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.2.0
+pnpm add -D github:outright-agency/checks#v0.2.1
 ```
 
 and declares its own checks in `checks.config.mjs` at its root:
@@ -35,7 +35,7 @@ The sections below cover each part in full.
 ## Install
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.2.0
+pnpm add -D github:outright-agency/checks#v0.2.1
 ```
 
 - Node 22.12 or later: the package is ES modules only, and an app without `"type": "module"`
@@ -46,6 +46,10 @@ pnpm add -D github:outright-agency/checks#v0.2.0
 - TypeScript finds the declarations through `exports`, so the app's `moduleResolution` is
   `bundler`, `node16` or `nodenext`; importing `checks.config.mjs` from TypeScript needs `allowJs`.
   A Next.js app has both.
+
+- On Windows, the check's steps and verify's lanes run in `sh`: the one on PATH (Git Bash, or Git's
+  tools on PATH), or else Git for Windows' own, found beside the `git` on PATH, so the commands
+  run from PowerShell and cmd as well. With neither, the command says to install Git for Windows.
 
 To take a new version, raise the tag in `package.json` and let the app's own gate pass on it.
 
@@ -111,8 +115,9 @@ anything, with exit 2, naming the file and the key.
 another, each even after one failed, so one run names every failure. The `tests` step is one Vitest
 process for two projects: the `app` tests the import graph relates to the last commit and the
 working tree, and every ratchet. Its workers recycle at `check.tests.workerMemory` and its own heap
-is held to `check.tests.parentHeapMb`, so many sessions can check at once on one machine. A passing
-step says one line; a failing one prints its output last. It takes no lock and leaves no receipt.
+is held to `check.tests.parentHeapMb`, so many sessions can check at once on one machine. Every
+step runs at low priority (`nice -n 10`; on Windows, below normal). A passing step says one line; a
+failing one prints its output last. It takes no lock and leaves no receipt.
 
 **`outright-checks verify [--force]`** is the full gate, once per tree and one at a time per
 machine:
@@ -125,6 +130,9 @@ machine:
   earn. `--force` runs it anyway.
 - **A lock.** A second verify on the machine waits for the first and says whom it is waiting on.
   SIGINT, SIGTERM and SIGHUP stop every lane's process group and release the lock.
+- **On Windows**, which has no process groups or POSIX signals, a lane runs to its own end: a red
+  lane stops no other, so a red verify takes as long as its longest lane, and Ctrl-C reaches the
+  lanes through the console they share with the verify.
 - Under `CI` it runs `verify.chain` instead: a runner has no neighbours and no memory.
 
 ## The test runner's preset
@@ -152,6 +160,11 @@ export default mergeConfig(
   are floored at two (a `VITEST_MAX_WORKERS` below two is raised), four by default, and recycle at
   1 GB. The setup file fails a run that still puts two files in one context
   (`--no-file-parallelism`, `--maxWorkers=1`) and says why.
+- **Workers, and a project that runs one file at a time.** The preset takes `VITEST_MAX_WORKERS`
+  into the root's worker count and out of the environment, where Vitest would apply it over every
+  project's own setting. So a project whose files must run one at a time (they empty a database
+  their neighbours use) says so in Vitest's own words, `fileParallelism: false` (or
+  `maxWorkers: 1`), on a process pool (`pool: "forks"`), and keeps it whatever the variable says.
 - **Time.** 5 s a test, 15 s under `CI`. Testing Library's waits get 3 s under `CI` (1 s, its
   own default, elsewhere).
 - **Reruns.** `--changed` reruns every test when `package.json`, the lockfile, the Vitest config,
@@ -265,7 +278,7 @@ steps:
   - uses: actions/checkout@v7
     with:
       fetch-depth: 2
-  - uses: outright-agency/checks/actions/ci-setup@v0.2.0
+  - uses: outright-agency/checks/actions/ci-setup@v0.2.1
     with:
       name: my-app
   - run: pnpm exec vitest run --project app --changed "$MY_APP_RATCHET_BASE_SHA"

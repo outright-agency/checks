@@ -1,6 +1,6 @@
 {
   "name": "@outright/checks",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "The checks' engine every Outright app installs: the gate runner, the test runner's preset, the helpers and the CI setup steps.",
   "license": "UNLICENSED",

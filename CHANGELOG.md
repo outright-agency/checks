@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.1
+
+A project that runs one file at a time, and the package on Windows:
+
+- The preset takes `VITEST_MAX_WORKERS` into the root's worker count, floored at two, and out of
+  the environment, where Vitest applied it over every project's own setting: a project's
+  `fileParallelism: false` (or `maxWorkers: 1`) on a process pool now holds wherever the variable
+  is set. Every project the config's later loads build gets the same count.
+- The analysis cache compares native real paths, so a Windows checkout under an 8.3 short name (or
+  any root spelled in another case) is recognised as itself and cached.
+- The gate folder resolves git's answer on Windows.
+- `check` and `verify` run the app's commands in `sh` on PATH, or else in Git for Windows' own, so
+  they run from PowerShell and cmd; with neither, one line says to install Git for Windows.
+- On Windows the check's steps run without `nice` (which dropped the tests step's report, so every
+  check said its tests FAILED) and at below-normal priority; verify's lanes start without a
+  process group, which Windows has not, and each runs to its own end.
+- A setup file given by an absolute Windows path is a rerun trigger.
+- The repository checks out with LF line endings everywhere; its CI runs the verify and the
+  installed proof on Windows as well as Linux.
+
 ## 0.2.0
 
 The tests check, `@outright/checks/tests-check`:
