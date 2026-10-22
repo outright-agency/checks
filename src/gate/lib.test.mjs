@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ChecksConfigError, loadConfig } from "../config.mjs";
@@ -110,12 +110,12 @@ describe("isCleanTree", () => {
 
 describe("gateDirectory", () => {
   it("resolves the relative answer git gives in the main checkout", () => {
-    expect(gateDirectory(".git", "/repo", "fixture-gate")).toBe("/repo/.git/fixture-gate");
+    expect(gateDirectory(".git", "/repo", "fixture-gate")).toBe(resolve("/repo/.git/fixture-gate"));
   });
 
   it("keeps the absolute answer git gives in a worktree — the same directory", () => {
     expect(gateDirectory("/repo/.git", "/repo/.worktrees/second", "fixture-gate")).toBe(
-      "/repo/.git/fixture-gate"
+      resolve("/repo/.git/fixture-gate")
     );
   });
 });

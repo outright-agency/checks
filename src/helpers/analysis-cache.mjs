@@ -100,7 +100,11 @@ export function repositoryStateKey(repoRoot, options = {}) {
   /** @param {string[]} args */
   const git = (...args) => execFile("git", args, { cwd: repoRoot }).toString("utf8");
   try {
-    if (realpathSync(git("rev-parse", "--show-toplevel").trim()) !== realpathSync(repoRoot)) {
+    // `.native`: Node's own realpath keeps the spelling it was given, a Windows 8.3 short name
+    // (`C:\PROGRA~1`) or another case, while git answers with the folder's own, so one folder
+    // would compare unequal to itself and never be cached.
+    const toplevel = git("rev-parse", "--show-toplevel").trim();
+    if (realpathSync.native(toplevel) !== realpathSync.native(repoRoot)) {
       return null;
     }
     const hash = createHash("sha256");
