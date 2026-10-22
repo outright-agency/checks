@@ -58,36 +58,18 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Where sh, nice and bash resolve
-        continue-on-error: true
-        run: |
-          where.exe sh nice bash git pnpm
-          $env:PATH -split ';'
-          git config --show-origin --get core.autocrlf
-          node -e "console.log(require('child_process').spawnSync('sh',['-c','echo sh-ok; command -v nice']).stdout?.toString(), require('child_process').spawnSync('nice',['-n','10','node','-e','console.log(1)']).error)"
       - run: pnpm install --frozen-lockfile
-      - name: git status after checkout
-        run: git status --porcelain
-      - name: Git identity
-        run: |
-          git config --global user.name "checks-ci"
-          git config --global user.email "checks-ci@users.noreply.github.com"
-      - name: verify (CI, chain via sh)
+      - name: child processes
         continue-on-error: true
-        run: pnpm verify
-      - name: the suite, from pwsh
-        continue-on-error: true
-        run: pnpm exec vitest run --reporter=verbose
-      - name: check (inner loop), CI unset
+        run: node .github/probe.mjs
+      - name: check with Git's tools off PATH, as from a bare PowerShell
         continue-on-error: true
         run: |
           Remove-Item Env:CI
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike '*\Git\bin*' -and $_ -notlike '*\Git\usr\bin*' -and $_ -notlike '*\Git\ucrt64*' -and $_ -notlike '*\mingw64*' -and $_ -notlike '*System32\bash*' }) -join ';'
+          where.exe sh nice git
           node bin/outright-checks.mjs check
-      - name: installed, from pwsh
-        continue-on-error: true
-        run: |
-          $env:CHECKS_INSTALLED_TESTS = "1"
-          pnpm exec vitest run --project installed --reporter=verbose
+          node bin/outright-checks.mjs verify --force
 
   action:
     if: ${{ github.event_name == 'pull_request' }}
