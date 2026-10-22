@@ -25,11 +25,12 @@ let app;
  */
 function inApp(command, args, env = {}) {
   const options = { cwd: app, env: cleanEnv(env), encoding: /** @type {const} */ ("utf8") };
-  // On Windows pnpm is `pnpm.cmd`, which only a shell runs: one command line, each part quoted for
-  // cmd.exe (Node deprecates an argument list beside a shell).
+  // On Windows pnpm is `pnpm.cmd`, which only a shell runs: one command line, each argument quoted
+  // for cmd.exe (Node deprecates an argument list beside a shell). The command itself is not: a
+  // batch file called by a quoted name from PATH misreads its own folder.
   const run =
     process.platform === "win32"
-      ? spawnSync([command, ...args].map((part) => `"${part}"`).join(" "), { ...options, shell: true })
+      ? spawnSync([command, ...args.map((arg) => `"${arg}"`)].join(" "), { ...options, shell: true })
       : spawnSync(command, args, options);
   return { code: run.status, output: `${run.stdout}${run.stderr}` };
 }
