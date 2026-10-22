@@ -24,9 +24,11 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { constants, setPriority } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { changedPaths, checkSteps, testStepResults } from "./lib.mjs";
+import { NO_SHELL, gateShell } from "./shell.mjs";
 
 /** @typedef {import("../config.mjs").ResolvedConfig} ResolvedConfig */
 /** @typedef {import("./lib.mjs").StepResult} StepResult */
@@ -44,6 +46,11 @@ export async function main({ cwd, config }) {
   const missing = config.check.requires.filter(({ path }) => !existsSync(join(cwd, path)));
   if (missing.length > 0) {
     for (const { message } of missing) console.log(`[check] ${message}`);
+    return 1;
+  }
+  const shell = gateShell();
+  if (shell === null) {
+    console.log(`[check] ${NO_SHELL}`);
     return 1;
   }
 
@@ -71,7 +78,7 @@ export async function main({ cwd, config }) {
         }))
       );
     } else {
-      const [result] = await run(cwd, { name: step.name, file: "sh", args: ["-c", step.command] });
+      const [result] = await run(cwd, { name: step.name, file: shell, args: ["-c", step.command] });
       results.push(step.chosen ? { ...result, command: step.command } : result);
     }
   }
@@ -114,6 +121,8 @@ function hasCommit(git, ref) {
 /**
  * One result per step — and one per project for the tests step, which reports them on a fourth
  * pipe. Every step runs at low priority: the machine it shares has other work to make room for.
+ * On Windows that is not `nice`: Git's `nice.exe` drops the fourth pipe, so the step starts
+ * directly and its priority is lowered after, which the processes it starts inherit.
  * @param {string} cwd
  * @param {{ name: string, file: string, args: string[], reports?: boolean }} step
  * @returns {Promise<StepResult[]>}
@@ -121,11 +130,19 @@ function hasCommit(git, ref) {
 function run(cwd, { name, file, args, reports = false }) {
   return new Promise((resolveStep) => {
     const startedAt = Date.now();
-    const child = spawn("nice", ["-n", "10", file, ...args], {
+    const windows = process.platform === "win32";
+    const child = spawn(windows ? file : "nice", windows ? args : ["-n", "10", file, ...args], {
       cwd,
       env: { ...process.env, FORCE_COLOR: process.stdout.isTTY ? "1" : "0" },
       stdio: ["pipe", "pipe", "pipe", ...(reports ? /** @type {const} */ (["pipe"]) : [])],
     });
+    if (windows && child.pid !== undefined) {
+      try {
+        setPriority(child.pid, constants.priority.PRIORITY_BELOW_NORMAL);
+      } catch {
+        // a step runs at whatever priority it can
+      }
+    }
     /** @type {Buffer[]} */
     const chunks = [];
     /** @type {Buffer[]} */
