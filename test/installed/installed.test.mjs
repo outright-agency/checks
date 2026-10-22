@@ -6,7 +6,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cleanEnv, git } from "../support/scratch-repo.mjs";
 
@@ -24,7 +24,13 @@ let app;
  * @param {Record<string, string>} [env]
  */
 function inApp(command, args, env = {}) {
-  const run = spawnSync(command, args, { cwd: app, env: cleanEnv(env), encoding: "utf8" });
+  const options = { cwd: app, env: cleanEnv(env), encoding: /** @type {const} */ ("utf8") };
+  // On Windows pnpm is `pnpm.cmd`, which only a shell runs: one command line, each part quoted for
+  // cmd.exe (Node deprecates an argument list beside a shell).
+  const run =
+    process.platform === "win32"
+      ? spawnSync([command, ...args].map((part) => `"${part}"`).join(" "), { ...options, shell: true })
+      : spawnSync(command, args, options);
   return { code: run.status, output: `${run.stdout}${run.stderr}` };
 }
 
@@ -42,7 +48,7 @@ beforeAll(() => {
   const install = inApp("pnpm", [
     "add",
     "-D",
-    `git+file://${PACKAGE_ROOT}#${head}`,
+    `git+${pathToFileURL(PACKAGE_ROOT).href}#${head}`,
     "vitest@4.1.11",
     "typescript@5.9.3",
     "tsx@^4.23.12",

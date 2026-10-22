@@ -61,7 +61,7 @@
   },
   "scripts": {
     "test": "vitest run",
-    "test:installed": "CHECKS_INSTALLED_TESTS=1 vitest run --project installed",
+    "test:installed": "node scripts/test-installed.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "check": "node bin/outright-checks.mjs check",
     "verify": "node bin/outright-checks.mjs verify",
