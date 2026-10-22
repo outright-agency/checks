@@ -44,6 +44,31 @@ function twoFiles(config) {
   return root;
 }
 
+/**
+ * A folder whose `serial` project asks for one file at a time, on a process pool, under the
+ * preset. Each of its three files claims a marker file that only one may hold, and keeps it
+ * 300 ms: two files running side by side would both start inside that time.
+ */
+function serialProject() {
+  const root = mkdtempSync(join(tmpdir(), "checks-serial-"));
+  made.push(root);
+  for (const name of ["a", "b", "c"]) {
+    writeFileSync(
+      join(root, `${name}.test.mjs`),
+      `import { rmSync, writeFileSync } from "node:fs";\ntest("${name} runs alone", async () => {\n  const busy = new URL("./busy", import.meta.url);\n  writeFileSync(busy, "${name}", { flag: "wx" });\n  await new Promise((resolve) => setTimeout(resolve, 300));\n  rmSync(busy);\n});\n`
+    );
+  }
+  writeFileSync(
+    join(root, "checks.config.mjs"),
+    'export default { name: "probe", ratchets: ["ratchets/**/*.test.mjs"], check: { steps: ["tests"] }, verify: { lanes: [{ name: "a", run: "true" }] } };\n'
+  );
+  writeFileSync(
+    join(root, "vitest.config.mjs"),
+    `import { checksVitestConfig } from ${JSON.stringify(PRESET)};\nimport checks from "./checks.config.mjs";\nconst config = checksVitestConfig(checks, {\n  configUrl: import.meta.url,\n  app: { exclude: ["*.test.mjs"] },\n  projects: [{ extends: true, test: { name: "serial", include: ["*.test.mjs"], pool: "forks", fileParallelism: false } }],\n});\nconfig.test.globals = true;\nexport default config;\n`
+  );
+  return root;
+}
+
 // Each case starts a Vitest of its own, about a second on a quiet machine and two or three on a
 // two-core CI runner; 20 s covers both under load.
 describe("one worker", () => {
@@ -76,6 +101,16 @@ describe("one worker", () => {
       encoding: "utf8",
     });
     expect(`${run.stdout}${run.stderr}`).toContain("2 passed");
+    expect(run.status).toBe(0);
+  }, 20_000);
+
+  it("runs a project's files one at a time when it asks, with VITEST_MAX_WORKERS=2", () => {
+    const root = serialProject();
+    const run = spawnSync(process.execPath, [VITEST, "run", "--root", root], {
+      env: cleanEnv({ VITEST_MAX_WORKERS: "2" }),
+      encoding: "utf8",
+    });
+    expect(`${run.stdout}${run.stderr}`).toContain("3 passed");
     expect(run.status).toBe(0);
   }, 20_000);
 });

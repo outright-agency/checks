@@ -1,6 +1,6 @@
 {
   "name": "@outright/checks",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "The checks' engine every Outright app installs: the gate runner, the test runner's preset, the helpers and the CI setup steps.",
   "license": "UNLICENSED",
@@ -61,7 +61,7 @@
   },
   "scripts": {
     "test": "vitest run",
-    "test:installed": "CHECKS_INSTALLED_TESTS=1 vitest run --project installed",
+    "test:installed": "node scripts/test-installed.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "check": "node bin/outright-checks.mjs check",
     "verify": "node bin/outright-checks.mjs verify",

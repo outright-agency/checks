@@ -2,7 +2,8 @@ name: CI
 
 # The package's own gate: its verify (on CI, the chain: types, declarations current, the suite) on
 # both supported Node lines; the package installed from git into a fixture app, as an app installs
-# it; and, on a pull request, its own ci-setup action run for real.
+# it; both on Linux and on Windows, where apps' developers work too; and, on a pull request, its
+# own ci-setup action run for real.
 on:
   push:
   pull_request:
@@ -17,11 +18,12 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         node: [22, 24]
     steps:
       - uses: actions/checkout@v7
@@ -33,8 +35,12 @@ jobs:
       - run: pnpm verify
 
   installed:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v5

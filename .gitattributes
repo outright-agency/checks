@@ -1,0 +1,4 @@
+# LF everywhere, whatever core.autocrlf says: the declarations are compared byte for byte
+# (`pnpm types:current`) and the tests read files as text, so a Windows checkout with CRLF fails
+# them. Binaries are detected and left alone.
+* text=auto eol=lf

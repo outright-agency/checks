@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { analysisCache, porcelainPaths, repositoryStateKey } from "./analysis-cache.mjs";
 
@@ -13,6 +13,12 @@ const { cachedAnalysis } = analysisCache({ name: "fixture" });
 // the 5 s default with nothing wrong in it. Each gets 20 s, which covers that and a two-core CI
 // runner.
 const BUDGET_MS = 20_000;
+
+/**
+ * Whether the temporary folder's file system ignores case (macOS, Windows), so one folder has
+ * more than one spelling.
+ */
+const CASE_INSENSITIVE = existsSync(tmpdir().toUpperCase()) && existsSync(tmpdir().toLowerCase());
 
 /** @type {string[]} */
 const roots = [];
@@ -67,6 +73,16 @@ describe("repositoryStateKey", () => {
 
     writeFileSync(join(root, "src/untracked.ts"), "export {};\n");
     expect(repositoryStateKey(root), "an untracked file is a different state").not.toBe(clean);
+  }, BUDGET_MS);
+
+  // On Windows the same holds for an 8.3 short name (`C:\PROGRA~1`), which Node's own realpath
+  // keeps and git expands.
+  it.skipIf(!CASE_INSENSITIVE)("recognises its root spelled another way: another case, or a Windows short name", () => {
+    const root = repository();
+    const respelled = join(dirname(root), basename(root).toUpperCase());
+    const key = repositoryStateKey(respelled);
+    expect(key).toMatch(/^[0-9a-f]{64}$/);
+    expect(key).toBe(repositoryStateKey(root));
   }, BUDGET_MS);
 
   it("refuses a root that is not the top of a work tree — fixtures are never cached", () => {

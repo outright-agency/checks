@@ -3,7 +3,7 @@
 // runs, and what the check's one test process did. `check.mjs` and `verify.mjs` do the spawning
 // and the file system.
 
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { ChecksConfigError } from "../config.mjs";
 
 /** @typedef {import("../config.mjs").ResolvedConfig} ResolvedConfig */
@@ -40,14 +40,14 @@ export function isCleanTree(porcelain) {
 /**
  * The folder that holds the gate's receipts and lock, in the git common directory every checkout
  * of the repository shares. `git rev-parse --git-common-dir` answers relative to the working
- * directory in the main checkout, and absolute in a linked worktree.
+ * directory in the main checkout, and absolute in a linked worktree; `resolve` takes both, and on
+ * Windows gives a rootless `/repo` its drive.
  * @param {string} commonDir
  * @param {string} cwd
  * @param {string} folder the app's gate folder (`<name>-gate`)
  */
 export function gateDirectory(commonDir, cwd, folder) {
-  const absolute = isAbsolute(commonDir) ? commonDir : resolve(cwd, commonDir);
-  return join(absolute, folder);
+  return join(resolve(cwd, commonDir), folder);
 }
 
 /** @param {string} cwd */

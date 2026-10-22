@@ -6,7 +6,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cleanEnv, git } from "../support/scratch-repo.mjs";
 
@@ -24,7 +24,14 @@ let app;
  * @param {Record<string, string>} [env]
  */
 function inApp(command, args, env = {}) {
-  const run = spawnSync(command, args, { cwd: app, env: cleanEnv(env), encoding: "utf8" });
+  const options = { cwd: app, env: cleanEnv(env), encoding: /** @type {const} */ ("utf8") };
+  // On Windows pnpm is `pnpm.cmd`, which only a shell runs: one command line, each argument quoted
+  // for cmd.exe (Node deprecates an argument list beside a shell). The command itself is not: a
+  // batch file called by a quoted name from PATH misreads its own folder.
+  const run =
+    process.platform === "win32"
+      ? spawnSync([command, ...args.map((arg) => `"${arg}"`)].join(" "), { ...options, shell: true })
+      : spawnSync(command, args, options);
   return { code: run.status, output: `${run.stdout}${run.stderr}` };
 }
 
@@ -36,13 +43,16 @@ const INSTALL_BUDGET_MS = 120_000;
 const RUN_BUDGET_MS = 60_000;
 
 beforeAll(() => {
-  app = join(realpathSync(mkdtempSync(join(tmpdir(), "checks-installed-"))), "app");
+  // `.native`: on Windows the temporary folder is spelled by an 8.3 short name
+  // (`C:\Users\LONGNA~1`), which Vite and Vitest spell out, so an app opened by it would see its
+  // own files under two names. A developer's checkout is opened by its own.
+  app = join(realpathSync.native(mkdtempSync(join(tmpdir(), "checks-installed-"))), "app");
   cpSync(FIXTURE, app, { recursive: true });
   const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: PACKAGE_ROOT, encoding: "utf8" }).trim();
   const install = inApp("pnpm", [
     "add",
     "-D",
-    `git+file://${PACKAGE_ROOT}#${head}`,
+    `git+${pathToFileURL(PACKAGE_ROOT).href}#${head}`,
     "vitest@4.1.11",
     "typescript@5.9.3",
     "tsx@^4.23.12",

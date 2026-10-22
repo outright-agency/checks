@@ -14,7 +14,8 @@ export function isCleanTree(porcelain: string): boolean;
 /**
  * The folder that holds the gate's receipts and lock, in the git common directory every checkout
  * of the repository shares. `git rev-parse --git-common-dir` answers relative to the working
- * directory in the main checkout, and absolute in a linked worktree.
+ * directory in the main checkout, and absolute in a linked worktree; `resolve` takes both, and on
+ * Windows gives a rootless `/repo` its drive.
  * @param {string} commonDir
  * @param {string} cwd
  * @param {string} folder the app's gate folder (`<name>-gate`)

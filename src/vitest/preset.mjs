@@ -22,6 +22,11 @@
 //
 // MEMORY AND WORKERS. Each worker recycles past the suite's limit; the check asks for half
 // (check-tests.mjs). Four workers unless `VITEST_MAX_WORKERS` says otherwise, never fewer than two.
+// Vitest would apply that variable over every project's own setting, so the preset takes it into
+// the root's instead: a project that must run one file at a time (its files empty a database
+// their neighbours use) says so with `fileParallelism: false` on a process pool (`pool: "forks"`),
+// and keeps it. On the VM pool one worker would put two files in one context, which the setup
+// file refuses.
 //
 // TIME. Five seconds a test on a developer's machine, fifteen under `CI`.
 //
@@ -45,7 +50,7 @@
 // The package's own modules run inside each test file's context, as the app's own files do
 // (`server.deps.inline`), and Next's `server-only` guard is stubbed (server-only.mjs).
 
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configDefaults } from "vitest/config";
 import { CONFIG_FILE, resolveConfig } from "../config.mjs";
@@ -73,10 +78,31 @@ export const SETUP_FILE = fileURLToPath(new URL("./setup.mjs", import.meta.url))
 export const SERVER_ONLY_STUB = fileURLToPath(new URL("./server-only.mjs", import.meta.url));
 
 /** @param {string} file */
-const isPath = (file) => file.startsWith(".") || file.startsWith("/");
+const isPath = (file) => file.startsWith(".") || isAbsolute(file);
 
 /** The package's name, as an app installs it: its modules run in each test file's context. */
 const PACKAGE = "@outright/checks";
+
+/**
+ * Where the preset keeps the variable once it has taken it: Vitest loads the config again for
+ * each project, and again when it changes in watch mode, and every load must see the same count.
+ */
+const TAKEN = "OUTRIGHT_CHECKS_MAX_WORKERS";
+
+/**
+ * `VITEST_MAX_WORKERS`, read as Vitest reads it and taken out of the environment, where Vitest
+ * would apply it after this file over every project's own setting, a project's
+ * `fileParallelism: false` included.
+ * @returns {number | undefined}
+ */
+function takeWorkersVariable() {
+  const value = process.env.VITEST_MAX_WORKERS ?? process.env[TAKEN];
+  delete process.env.VITEST_MAX_WORKERS;
+  if (value === undefined) return undefined;
+  process.env[TAKEN] = value;
+  const workers = Number.parseInt(value, 10);
+  return Number.isNaN(workers) ? undefined : workers;
+}
 
 /**
  * The test runner's settings for an app, from its checks config.
@@ -90,11 +116,7 @@ export function checksVitestConfig(config, options) {
   const configFile = fileURLToPath(configUrl);
   const root = dirname(configFile);
 
-  // Vitest reads `VITEST_MAX_WORKERS` itself, after this file and over `maxWorkers`, so the floor
-  // is applied to the variable, not to the option.
-  if (Number(process.env.VITEST_MAX_WORKERS) < MIN_WORKERS) {
-    process.env.VITEST_MAX_WORKERS = String(MIN_WORKERS);
-  }
+  const workers = takeWorkersVariable();
 
   const excluded = ["**/node_modules/**", "**/.*/**", ...exclude];
   return {
@@ -102,7 +124,7 @@ export function checksVitestConfig(config, options) {
     test: {
       pool: "vmForks",
       vmMemoryLimit: SUITE_WORKER_MEMORY,
-      maxWorkers: Number(process.env.VITEST_MAX_WORKERS ?? DEFAULT_WORKERS),
+      maxWorkers: Math.max(MIN_WORKERS, workers ?? DEFAULT_WORKERS),
       testTimeout: process.env.CI ? CI_TEST_TIMEOUT_MS : TEST_TIMEOUT_MS,
       setupFiles: [SETUP_FILE, ...setupFiles],
       server: { deps: { inline: [PACKAGE] } },
