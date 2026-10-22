@@ -24,6 +24,7 @@ export function cleanEnv(extra = {}) {
   delete env.VITEST;
   delete env.VITEST_WORKER_ID;
   delete env.VITEST_POOL_ID;
+  delete env.OUTRIGHT_CHECKS_MAX_WORKERS; // the preset's own copy of VITEST_MAX_WORKERS
   delete env.NODE_OPTIONS;
   return env;
 }
