@@ -47,9 +47,19 @@ export const CONFIG_FILE: "checks.config.mjs";
  * @property {RegExp} [summary] the lines of a passing lane's output that a pass reprints
  */
 /**
+ * The database tests check, turned on: where an app's own parts of it sit.
+ * @typedef {object} DbTestsSwitch
+ * @property {string} lists the file an app's existing tests are listed in
+ * @property {string} exceptions the file holding the stop's exceptions; it exports `STOP_EXCEPTIONS`
+ * @property {string} rule the doc a finding points to
+ * @property {RegExp} [files] which test files are database tests; `/\.db\.test\.ts$/` by default
+ * @property {string[]} [roots] the folders they live under; `["src"]` by default
+ */
+/**
  * @typedef {object} ChecksConfig
  * @property {string} name lower-case letters, digits and dashes, starting with a letter
  * @property {string[]} [ratchets] globs of the tests that read the source as text and run whole
+ * @property {{ dbTests?: DbTestsSwitch }} [checks] the package's checks this app turns on; each ships off
  * @property {CheckConfig} check
  * @property {VerifyConfig} verify
  */
@@ -62,6 +72,7 @@ export const CONFIG_FILE: "checks.config.mjs";
  * @typedef {object} ResolvedConfig
  * @property {string} name
  * @property {string[]} ratchets
+ * @property {{ dbTests: Required<DbTestsSwitch> | null }} checks
  * @property {{ requires: { path: string, message: string }[], steps: (Step | "tests")[], tests: { workerMemory: string, parentHeapMb: number } }} check
  * @property {{ first: Lane[], lanes: Lane[], chain: string, summary: RegExp }} verify
  * @property {string} gateFolder
@@ -70,6 +81,8 @@ export const CONFIG_FILE: "checks.config.mjs";
 export const DEFAULT_RATCHETS: string[];
 export const DEFAULT_CHAIN: "pnpm verify:chain";
 export const DEFAULT_SUMMARY: RegExp;
+export const DEFAULT_DB_TESTS_FILES: RegExp;
+export const DEFAULT_DB_TESTS_ROOTS: string[];
 /** A mistake in an app's `checks.config.mjs`. The runners print it and exit 2. */
 export class ChecksConfigError extends Error {
     /** @param {string} message */
@@ -131,6 +144,31 @@ export type VerifyConfig = {
      */
     summary?: RegExp | undefined;
 };
+/**
+ * The database tests check, turned on: where an app's own parts of it sit.
+ */
+export type DbTestsSwitch = {
+    /**
+     * the file an app's existing tests are listed in
+     */
+    lists: string;
+    /**
+     * the file holding the stop's exceptions; it exports `STOP_EXCEPTIONS`
+     */
+    exceptions: string;
+    /**
+     * the doc a finding points to
+     */
+    rule: string;
+    /**
+     * which test files are database tests; `/\.db\.test\.ts$/` by default
+     */
+    files?: RegExp | undefined;
+    /**
+     * the folders they live under; `["src"]` by default
+     */
+    roots?: string[] | undefined;
+};
 export type ChecksConfig = {
     /**
      * lower-case letters, digits and dashes, starting with a letter
@@ -140,6 +178,12 @@ export type ChecksConfig = {
      * globs of the tests that read the source as text and run whole
      */
     ratchets?: string[] | undefined;
+    /**
+     * the package's checks this app turns on; each ships off
+     */
+    checks?: {
+        dbTests?: DbTestsSwitch;
+    } | undefined;
     check: CheckConfig;
     verify: VerifyConfig;
 };
@@ -153,6 +197,9 @@ export type Names = {
 export type ResolvedConfig = {
     name: string;
     ratchets: string[];
+    checks: {
+        dbTests: Required<DbTestsSwitch> | null;
+    };
     check: {
         requires: {
             path: string;

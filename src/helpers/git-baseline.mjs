@@ -33,6 +33,14 @@ import { namesOf } from "../config.mjs";
  * @typedef {readonly [string, string]} MovedRoot
  */
 
+/** Git with its stderr kept: a check asks for files the base may not carry, and that answer is no error. @type {ExecFile} */
+const quiet = (file, args, options) =>
+  execFileSync(file, args, {
+    ...options,
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
 /** @param {{ cwd: string, execFile: ExecFile }} options @param {string[]} args */
 function git(options, args) {
   return options.execFile("git", args, { cwd: options.cwd, encoding: "utf8" }).trim();
@@ -82,6 +90,50 @@ export function baselineExistsAtBase(baseSha, filePath, options = {}) {
   } catch {
     return false;
   }
+}
+
+/**
+ * A file as it stood at the base, or null when the base doesn't carry it. A base that can't be
+ * resolved stays loud, as in `baselineExistsAtBase`.
+ * @param {string} baseSha
+ * @param {string} filePath
+ * @param {GitBaselineOptions} [options]
+ * @returns {string | null}
+ */
+export function atBase(baseSha, filePath, options = {}) {
+  const at = { ...options, execFile: options.execFile ?? quiet };
+  if (!baselineExistsAtBase(baseSha, filePath, at)) return null;
+  return at.execFile("git", ["show", `${baseSha}:${filePath}`], { cwd: resolved(at).cwd, encoding: "utf8" });
+}
+
+/**
+ * What the change does between the base and the working tree: each file git sees as renamed (its
+ * path at the base to its path today), and every file it touches, at both paths of a rename,
+ * untracked files included.
+ * @param {string} baseSha
+ * @param {GitBaselineOptions} [options]
+ * @returns {{ renames: Record<string, string>, touched: string[] }}
+ */
+export function changesSince(baseSha, options = {}) {
+  const cwd = resolved(options).cwd;
+  const read = (/** @type {string[]} */ args) => quiet("git", args, { cwd, encoding: "utf8" });
+  const fields = read(["diff", "-M", "--name-status", "-z", baseSha]).split("\0");
+  /** @type {Record<string, string>} */
+  const renames = {};
+  const touched = new Set(read(["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean));
+  for (let at = 0; at < fields.length; ) {
+    const status = fields[at];
+    if (status === "") break;
+    if (status.startsWith("R") || status.startsWith("C")) {
+      if (status.startsWith("R")) renames[fields[at + 1]] = fields[at + 2];
+      touched.add(fields[at + 1]).add(fields[at + 2]);
+      at += 3;
+    } else {
+      touched.add(fields[at + 1]);
+      at += 2;
+    }
+  }
+  return { renames, touched: [...touched] };
 }
 
 /**
@@ -204,6 +256,12 @@ export function gitBaseline(config, { movedRoots = [] } = {}) {
   const paths = movedPaths(movedRoots);
 
   /**
+   * The base a run was handed, if any.
+   * @param {Readonly<Record<string, string | undefined>>} env
+   */
+  const namedBase = (env) => env[names.ratchetBase] ?? env.GITHUB_BASE_SHA ?? env.GITHUB_EVENT_BEFORE;
+
+  /**
    * The commit to compare the current checkout with. CI supplies it exactly; a local branch falls
    * back to its merge base with `main`. A missing CI base is never silently replaced by HEAD.
    * @param {GitBaselineOptions} [options]
@@ -211,8 +269,7 @@ export function gitBaseline(config, { movedRoots = [] } = {}) {
    */
   function resolveRatchetBase(options = {}) {
     const at = resolved(options);
-    const env = options.env ?? process.env;
-    const explicit = env[names.ratchetBase] ?? env.GITHUB_BASE_SHA ?? env.GITHUB_EVENT_BEFORE;
+    const explicit = namedBase(options.env ?? process.env);
     if (explicit) return resolveCommit(explicit, at);
 
     const head = git(at, ["rev-parse", "HEAD"]);
@@ -221,9 +278,47 @@ export function gitBaseline(config, { movedRoots = [] } = {}) {
     return git(at, ["merge-base", "HEAD", "main"]);
   }
 
+  /**
+   * The ratchet base, or null on a run by hand that names none: CI gives one only to a pull request
+   * and a queue entry, so nothing is compared there. Any other base that can't be resolved throws,
+   * and is never read as "no baseline".
+   * @param {GitBaselineOptions} [options]
+   * @returns {string | null}
+   */
+  function ratchetBase(options = {}) {
+    const env = options.env ?? process.env;
+    if (env.GITHUB_EVENT_NAME === "workflow_dispatch" && !env[names.ratchetBase]) return null;
+    return resolveRatchetBase(options);
+  }
+
+  /**
+   * The commit a change's own count starts from: the ratchet base, unless a checkout's `main` lags
+   * `origin/main`. The merge base with a lagging `main` holds what others landed since, and a count
+   * from it would charge them to this branch, so with no base named the later of the two forks
+   * wins. Comparing baselines can't go wrong this way, since a lagging base only reads less.
+   * @param {GitBaselineOptions} [options]
+   * @returns {string | null}
+   */
+  function countBase(options = {}) {
+    const base = ratchetBase(options);
+    if (base === null || namedBase(options.env ?? process.env)) return base;
+    const at = { cwd: options.cwd ?? process.cwd(), execFile: quiet };
+    try {
+      const fork = git(at, ["merge-base", "HEAD", "refs/remotes/origin/main"]);
+      git(at, ["merge-base", "--is-ancestor", base, fork]);
+      return fork;
+    } catch {
+      return base;
+    }
+  }
+
   return {
     resolveRatchetBase,
+    ratchetBase,
+    countBase,
     baselineExistsAtBase,
+    atBase,
+    changesSince,
     loadGitBaselineExport,
     /** @param {string} subject */
     toCurrentPathSpelling: (subject) => spell(subject, movedRoots, paths),

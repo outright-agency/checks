@@ -6,8 +6,15 @@
 // the variable at two, which covers some of those ways and not all; the setup file claims its
 // context before each file, so a run that still shares one fails here: a second claim means a
 // second file is sharing it.
+//
+// A project that shares a process on purpose has said so: `isolate: false` on a process pool, which
+// the preset reads and marks. Its files share every module by choice, so the claim stands aside for
+// it and for nothing else.
 
 const CLAIM = Symbol.for("@outright/checks.file-context");
+
+/** The variable the preset gives a project that shares a process. */
+export const SHARES_A_PROCESS = "OUTRIGHT_CHECKS_SHARES_A_PROCESS";
 
 export const ONE_FILE_PER_CONTEXT_MESSAGE =
   "Two test files ran in one VM context, so the second shares every module the first loaded, mocks included. " +
@@ -17,10 +24,12 @@ export const ONE_FILE_PER_CONTEXT_MESSAGE =
 
 /**
  * Claims `scope` (a test file's `globalThis`) for one test file, and throws when a file before it
- * already did.
+ * already did, unless the file's project shares a process.
  * @param {object} scope
+ * @param {Readonly<Record<string, string | undefined>>} [env]
  */
-export function claimContextForOneFile(scope) {
+export function claimContextForOneFile(scope, env = process.env) {
+  if (env[SHARES_A_PROCESS] === "1") return;
   const marked = /** @type {Record<symbol, true | undefined>} */ (scope);
   if (marked[CLAIM]) throw new Error(ONE_FILE_PER_CONTEXT_MESSAGE);
   marked[CLAIM] = true;

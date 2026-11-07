@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0
+
+A project that shares a process, and a check that ships switched off. An app that raises its pin
+sees nothing turned on, and its config keeps working as it is.
+
+- A project that says `isolate: false` on a process pool (`pool: "forks"`) shares that process under
+  the preset: the preset marks it, and the setup file leaves it alone. `isolate: false` with no pool
+  of its own stays on the VM pool and keeps the refusal.
+- `checks` in `checks.config.mjs`: the package's checks an app turns on. Each ships off, an unknown
+  key is refused, and nothing the package runs by itself imports a check.
+- The database tests check, `@outright/checks/db-tests`, turned on with `checks.dbTests`:
+  `analyzeDbTests(config, { root, env })`, `evaluateDbTests(analysis, { debt, exceptions, limit })`,
+  `formatDbTestsFindings` and seven rules (`DB_TESTS_RULES`). The limit and the lists are the app's.
+- `gitBaseline(config)` gains `ratchetBase`, `countBase`, `atBase` and `changesSince`.
+
 ## 0.2.1
 
 A project that runs one file at a time, and the package on Windows:

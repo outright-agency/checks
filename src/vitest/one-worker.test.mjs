@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,6 +69,34 @@ function serialProject() {
   return root;
 }
 
+/**
+ * A folder whose `shared` project says `isolate: false`, at one worker so its files land in one
+ * place, on the given pool or on the VM pool it inherits. Three files push to one module and write
+ * how many they see to `counts`.
+ * @param {string} [pool]
+ */
+function sharedProject(pool) {
+  const root = mkdtempSync(join(tmpdir(), "checks-shared-"));
+  made.push(root);
+  writeFileSync(join(root, "seen.mjs"), "export const seen = [];\n");
+  for (const name of ["a", "b", "c"]) {
+    writeFileSync(
+      join(root, `${name}.test.mjs`),
+      `import { appendFileSync } from "node:fs";\nimport { seen } from "./seen.mjs";\ntest("${name}", () => {\n  seen.push("${name}");\n  appendFileSync(new URL("./counts", import.meta.url), \`\${seen.length}\\n\`);\n});\n`
+    );
+  }
+  writeFileSync(
+    join(root, "checks.config.mjs"),
+    'export default { name: "probe", ratchets: ["ratchets/**/*.test.mjs"], check: { steps: ["tests"] }, verify: { lanes: [{ name: "a", run: "true" }] } };\n'
+  );
+  const test = { name: "shared", include: ["*.test.mjs"], isolate: false, maxWorkers: 1, ...(pool ? { pool } : {}) };
+  writeFileSync(
+    join(root, "vitest.config.mjs"),
+    `import { checksVitestConfig } from ${JSON.stringify(PRESET)};\nimport checks from "./checks.config.mjs";\nconst config = checksVitestConfig(checks, {\n  configUrl: import.meta.url,\n  app: { exclude: ["*.test.mjs"] },\n  projects: [{ extends: true, test: ${JSON.stringify(test)} }],\n});\nconfig.test.globals = true;\nexport default config;\n`
+  );
+  return root;
+}
+
 // Each case starts a Vitest of its own, about a second on a quiet machine and two or three on a
 // two-core CI runner; 20 s covers both under load.
 describe("one worker", () => {
@@ -112,5 +140,23 @@ describe("one worker", () => {
     });
     expect(`${run.stdout}${run.stderr}`).toContain("3 passed");
     expect(run.status).toBe(0);
+  }, 20_000);
+
+  it("lets a project share a process when it says so, and the files see one module", () => {
+    const root = sharedProject("forks");
+    const run = spawnSync(process.execPath, [VITEST, "run", "--root", root], { env: cleanEnv(), encoding: "utf8" });
+    expect(`${run.stdout}${run.stderr}`).toContain("3 passed");
+    expect(readFileSync(join(root, "counts"), "utf8").trim().split("\n")).toEqual(["1", "2", "3"]);
+    expect(run.status).toBe(0);
+  }, 20_000);
+
+  it("still refuses one context when a project says isolate: false on the VM pool", () => {
+    const root = sharedProject();
+    const run = spawnSync(process.execPath, [VITEST, "run", "--root", root, "--no-file-parallelism"], {
+      env: cleanEnv(),
+      encoding: "utf8",
+    });
+    expect(`${run.stdout}${run.stderr}`).toContain("Two test files ran in one VM context");
+    expect(run.status).not.toBe(0);
   }, 20_000);
 });
