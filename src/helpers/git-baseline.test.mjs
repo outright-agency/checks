@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { commitAll, git, scratchRepo } from "../../test/support/scratch-repo.mjs";
 import {
+  atBase,
   baselineExistsAtBase,
+  changesSince,
   gitBaseline,
   loadGitBaselineExport,
   toCurrentPathSpelling,
@@ -183,5 +188,95 @@ describe("historical path spelling", () => {
     const base = fixture.withCurrentPathKeys({ "src/lib/notice.ts": 1 });
     expect(base["src/shared/lib/brand-new.ts"]).toBeUndefined();
     expect(base["src/shared/runtime/notice.ts"]).toBe(1);
+  });
+});
+
+describe("the commit a change is counted from", () => {
+  const { countBase, ratchetBase } = gitBaseline({ name: "probe-app" });
+  const NAMED = "PROBE_APP_RATCHET_BASE_SHA";
+  /** @type {string} */
+  let root;
+  let first = "";
+  let fork = "";
+
+  /** @param {string} name */
+  function commit(name) {
+    writeFileSync(join(root, name), name);
+    commitAll(root, name);
+    return git(root, "rev-parse", "HEAD");
+  }
+
+  beforeAll(() => {
+    root = scratchRepo("export default {};\n");
+    first = commit("first");
+    git(root, "checkout", "-q", "-b", "newer");
+    fork = commit("merged-since");
+    git(root, "update-ref", "refs/remotes/origin/main", fork);
+    git(root, "checkout", "-q", "-b", "work");
+    commit("mine");
+  });
+
+  it("reads the fork from origin/main when the local main lags", () => {
+    expect(countBase({ env: {}, cwd: root })).toBe(fork);
+  });
+
+  it("takes a base CI names, whatever origin/main says", () => {
+    expect(countBase({ env: { [NAMED]: first }, cwd: root })).toBe(first);
+  });
+
+  it("keeps the local main when it is the later one", () => {
+    git(root, "update-ref", "refs/heads/main", fork);
+    git(root, "update-ref", "refs/remotes/origin/main", first);
+    expect(countBase({ env: {}, cwd: root })).toBe(fork);
+    git(root, "update-ref", "refs/heads/main", first);
+    git(root, "update-ref", "refs/remotes/origin/main", fork);
+  });
+
+  it("falls back to the plain base with no origin/main", () => {
+    git(root, "update-ref", "-d", "refs/remotes/origin/main");
+    expect(countBase({ env: {}, cwd: root })).toBe(first);
+    git(root, "update-ref", "refs/remotes/origin/main", fork);
+  });
+
+  it("reads no base on a run by hand that names none", () => {
+    const env = { GITHUB_EVENT_NAME: "workflow_dispatch" };
+    expect(ratchetBase({ env, cwd: root })).toBeNull();
+    expect(countBase({ env, cwd: root })).toBeNull();
+  });
+
+  it("reads the base a run by hand does name", () => {
+    expect(ratchetBase({ env: { GITHUB_EVENT_NAME: "workflow_dispatch", [NAMED]: first }, cwd: root })).toBe(first);
+  });
+});
+
+describe("what a change does against its base", () => {
+  /** @type {string} */
+  let root;
+  let base = "";
+
+  beforeAll(() => {
+    root = scratchRepo("export default {};\n", { "kept.txt": "kept\n", "moved.txt": "a long enough text to be seen as moved\n" });
+    base = git(root, "rev-parse", "HEAD");
+    git(root, "mv", "moved.txt", "there.txt");
+    writeFileSync(join(root, "kept.txt"), "changed\n");
+    commitAll(root, "change");
+    writeFileSync(join(root, "untracked.txt"), "new\n");
+  });
+
+  afterAll(() => rmSync(join(root, "untracked.txt"), { force: true }));
+
+  it("answers a file as it stood at the base, or null when the base lacks it", () => {
+    expect(atBase(base, "kept.txt", { cwd: root })).toBe("kept\n");
+    expect(atBase(base, "there.txt", { cwd: root })).toBeNull();
+  });
+
+  it("stays loud on a base git can't resolve", () => {
+    expect(() => atBase("0".repeat(40), "kept.txt", { cwd: root })).toThrow("Cannot resolve ratchet base commit");
+  });
+
+  it("names a rename at both paths, and an untracked file", () => {
+    const { renames, touched } = changesSince(base, { cwd: root });
+    expect(renames).toEqual({ "moved.txt": "there.txt" });
+    expect([...touched].sort()).toEqual(["kept.txt", "moved.txt", "there.txt", "untracked.txt"]);
   });
 });
