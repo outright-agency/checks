@@ -28,6 +28,12 @@
 // and keeps it. On the VM pool one worker would put two files in one context, which the setup
 // file refuses.
 //
+// SHARING A PROCESS. A project whose files may share one says so in Vitest's own words, `isolate:
+// false` on a process pool, and the preset marks it through its `env`, so the setup file's claim
+// stands aside. A failed mark stays loud: the claim then refuses the run. `isolate: false` with no
+// pool of its own stays on the VM pool, where it means nothing, and keeps the claim. What such
+// files leave behind (a client, a mock, a global) is the project's to answer for.
+//
 // TIME. Five seconds a test on a developer's machine, fifteen under `CI`.
 //
 // RERUNS. `--changed` reruns every test when one of these changed: the root's package.json,
@@ -54,6 +60,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configDefaults } from "vitest/config";
 import { CONFIG_FILE, resolveConfig } from "../config.mjs";
+import { SHARES_A_PROCESS } from "./one-file-per-context.mjs";
 import {
   CI_TEST_TIMEOUT_MS,
   DEFAULT_WORKERS,
@@ -104,6 +111,20 @@ function takeWorkersVariable() {
   return Number.isNaN(workers) ? undefined : workers;
 }
 
+/** The pools that run a file in a process of its own, or a process its files share. */
+const PROCESS_POOLS = ["forks", "threads"];
+
+/**
+ * A project that shares a process, marked for the setup file; any other, as it was given.
+ * @param {TestProjectInlineConfiguration} project
+ * @returns {TestProjectInlineConfiguration}
+ */
+function markSharedProcess(project) {
+  const { test } = project;
+  if (test?.isolate !== false || !PROCESS_POOLS.includes(/** @type {string} */ (test.pool))) return project;
+  return { ...project, test: { ...test, env: { ...test.env, [SHARES_A_PROCESS]: "1" } } };
+}
+
 /**
  * The test runner's settings for an app, from its checks config.
  * @param {ChecksConfig} config the app's `checks.config.mjs`
@@ -146,7 +167,7 @@ export function checksVitestConfig(config, options) {
           },
         },
         { extends: true, test: { name: "ratchets", include: ratchets, exclude: excluded } },
-        ...projects,
+        ...projects.map(markSharedProcess),
       ],
     },
   };

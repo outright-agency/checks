@@ -2,6 +2,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mergeConfig } from "vitest/config";
+import { SHARES_A_PROCESS } from "./one-file-per-context.mjs";
 import { SERVER_ONLY_STUB, SETUP_FILE, checksVitestConfig } from "./preset.mjs";
 
 const FIXTURES = fileURLToPath(new URL("../../test/fixtures/", import.meta.url));
@@ -192,5 +193,43 @@ describe("checksVitestConfig", () => {
         configUrl: configAt("/apps/x/vitest.config.ts"),
       })
     ).toThrow("checks.config.mjs: check.steps must list at least one step");
+  });
+});
+
+describe("a project that shares a process", () => {
+  /** The project as the preset hands it back. @param {any} given */
+  async function built(given) {
+    const config = /** @type {any} */ (
+      checksVitestConfig(await fixture("single"), { configUrl: SINGLE, projects: [given] })
+    );
+    return project(config, "s");
+  }
+  /** @param {object} test */
+  const asked = (test) => ({ extends: /** @type {const} */ (true), test: { name: "s", ...test } });
+
+  it("marks a project on a process pool with isolate: false, keeping its own env", async () => {
+    const { test } = await built(asked({ pool: "forks", isolate: false, env: { KEPT: "1" } }));
+    expect(test.env).toEqual({ KEPT: "1", [SHARES_A_PROCESS]: "1" });
+    expect(test.pool).toBe("forks");
+  });
+
+  it("takes the threads pool too", async () => {
+    const { test } = await built(asked({ pool: "threads", isolate: false }));
+    expect(test.env).toEqual({ [SHARES_A_PROCESS]: "1" });
+  });
+
+  it("leaves isolate: false with no pool alone, since the VM pool ignores it", async () => {
+    const given = asked({ isolate: false });
+    expect(await built(given)).toBe(given);
+  });
+
+  it("leaves a process pool without isolate: false alone, its object untouched", async () => {
+    const given = asked({ pool: "forks", env: { KEPT: "1" } });
+    expect(await built(given)).toBe(given);
+  });
+
+  it("leaves isolate: false on a VM pool alone", async () => {
+    const given = asked({ pool: "vmForks", isolate: false });
+    expect(await built(given)).toBe(given);
   });
 });

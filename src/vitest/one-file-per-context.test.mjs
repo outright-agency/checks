@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { ONE_FILE_PER_CONTEXT_MESSAGE, claimContextForOneFile } from "./one-file-per-context.mjs";
+import {
+  ONE_FILE_PER_CONTEXT_MESSAGE,
+  SHARES_A_PROCESS,
+  claimContextForOneFile,
+} from "./one-file-per-context.mjs";
 
 // The setup file claims each VM context for one test file, so a run that puts two files in one
 // context — Vitest's VM pools at one worker — fails instead of sharing every module.
@@ -18,6 +22,12 @@ describe("one test file per VM context", () => {
     expect(ONE_FILE_PER_CONTEXT_MESSAGE).toContain("two workers or more");
     expect(ONE_FILE_PER_CONTEXT_MESSAGE).toContain("--no-file-parallelism");
     expect(ONE_FILE_PER_CONTEXT_MESSAGE).toContain("VITEST_MAX_WORKERS=1");
+  });
+
+  it("leaves a file alone when its project shares a process", () => {
+    const context = {};
+    claimContextForOneFile(context, { [SHARES_A_PROCESS]: "1" });
+    expect(() => claimContextForOneFile(context, { [SHARES_A_PROCESS]: "1" })).not.toThrow();
   });
 
   it("keeps contexts apart", () => {

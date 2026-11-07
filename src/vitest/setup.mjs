@@ -4,7 +4,7 @@ import { CI_ASYNC_UTIL_TIMEOUT_MS } from "../limits.mjs";
 import { claimContextForOneFile } from "./one-file-per-context.mjs";
 
 // A run that puts a second file in the same VM context shares every module between them, so it
-// fails here and says why.
+// fails here and says why. A project the preset marked as sharing a process is left alone.
 claimContextForOneFile(globalThis);
 
 // Node 25 ships Web Storage on by default, so `globalThis.localStorage` exists before jsdom loads.
