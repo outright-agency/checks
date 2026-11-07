@@ -17,6 +17,27 @@
  */
 export function baselineExistsAtBase(baseSha: string, filePath: string, options?: GitBaselineOptions): boolean;
 /**
+ * A file as it stood at the base, or null when the base doesn't carry it. A base that can't be
+ * resolved stays loud, as in `baselineExistsAtBase`.
+ * @param {string} baseSha
+ * @param {string} filePath
+ * @param {GitBaselineOptions} [options]
+ * @returns {string | null}
+ */
+export function atBase(baseSha: string, filePath: string, options?: GitBaselineOptions): string | null;
+/**
+ * What the change does between the base and the working tree: each file git sees as renamed (its
+ * path at the base to its path today), and every file it touches, at both paths of a rename,
+ * untracked files included.
+ * @param {string} baseSha
+ * @param {GitBaselineOptions} [options]
+ * @returns {{ renames: Record<string, string>, touched: string[] }}
+ */
+export function changesSince(baseSha: string, options?: GitBaselineOptions): {
+    renames: Record<string, string>;
+    touched: string[];
+};
+/**
  * Loads a TypeScript baseline export directly from a git blob. Baseline modules hold only data,
  * local helpers and type-only imports; runtime imports are refused, so the historical file cannot
  * execute arbitrary repository code.
@@ -63,7 +84,11 @@ export function gitBaseline(config: {
     movedRoots?: readonly MovedRoot[];
 }): {
     resolveRatchetBase: (options?: GitBaselineOptions) => string;
+    ratchetBase: (options?: GitBaselineOptions) => string | null;
+    countBase: (options?: GitBaselineOptions) => string | null;
     baselineExistsAtBase: typeof baselineExistsAtBase;
+    atBase: typeof atBase;
+    changesSince: typeof changesSince;
     loadGitBaselineExport: typeof loadGitBaselineExport;
     /** @param {string} subject */
     toCurrentPathSpelling: (subject: string) => string;
