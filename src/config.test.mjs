@@ -88,6 +88,59 @@ describe("resolveConfig", () => {
   });
 });
 
+describe("a check of the package's", () => {
+  const dbTests = { lists: "a/lists.ts", exceptions: "a/exceptions.ts", rule: "docs/rule.md" };
+  /** @param {unknown} checks */
+  const resolved = (checks) => resolveConfig(/** @type {any} */ (config({ checks })));
+
+  it("leaves every check off when the config names none", () => {
+    expect(resolveConfig(/** @type {any} */ (config())).checks).toEqual({ dbTests: null });
+  });
+
+  it("fills a check's defaults when an app turns it on", () => {
+    const on = resolved({ dbTests }).checks.dbTests;
+    expect(on).toMatchObject({ ...dbTests, roots: ["src"] });
+    expect(on?.files.source).toBe("\\.db\\.test\\.ts$");
+  });
+
+  it("keeps an app's own files and roots", () => {
+    const on = resolved({ dbTests: { ...dbTests, files: /\.parity\.test\.ts$/, roots: ["app"] } }).checks.dbTests;
+    expect(on?.files.source).toBe("\\.parity\\.test\\.ts$");
+    expect(on?.roots).toEqual(["app"]);
+  });
+
+  it("strips the flags that make a pattern remember where it stopped", () => {
+    const files = resolved({ dbTests: { ...dbTests, files: /\.db\.test\.ts$/gy } }).checks.dbTests?.files;
+    expect(files?.flags).toBe("");
+  });
+
+  it("refuses a check it doesn't know, so a typo can't leave one off", () => {
+    expect(() => resolved({ dbTest: dbTests })).toThrow("unknown key checks.dbTest");
+  });
+
+  it("refuses an unknown key inside a check", () => {
+    expect(() => resolved({ dbTests: { ...dbTests, limit: 30 } })).toThrow("unknown key checks.dbTests.limit");
+  });
+
+  it("refuses a check missing what is the app's own", () => {
+    expect(() => resolved({ dbTests: { lists: "a", exceptions: "b" } })).toThrow(
+      "checks.dbTests needs lists, exceptions and rule"
+    );
+  });
+
+  it("refuses files that are no regular expression", () => {
+    expect(() => resolved({ dbTests: { ...dbTests, files: "*.db.test.ts" } })).toThrow(
+      "checks.dbTests.files must be a regular expression"
+    );
+  });
+
+  it("refuses empty roots", () => {
+    expect(() => resolved({ dbTests: { ...dbTests, roots: [] } })).toThrow(
+      "checks.dbTests.roots must list at least one folder"
+    );
+  });
+});
+
 describe("loadConfig", () => {
   it("loads both fixture apps", async () => {
     const monorepo = await loadConfig(join(FIXTURES, "monorepo"));

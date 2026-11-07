@@ -7,6 +7,9 @@
 // analysis cache off (`<NAME>_GATE_NO_CACHE`) and carry CI's base commit
 // (`<NAME>_RATCHET_BASE_SHA`). An app that already had such names keeps them by choosing the name
 // they were made from.
+//
+// A check of the package's ships switched off: raising the pin turns nothing on. An app turns one
+// on under `checks`, with what is its own, and its live test hands the engine its lists.
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -47,9 +50,20 @@ export const CONFIG_FILE = "checks.config.mjs";
  */
 
 /**
+ * The database tests check, turned on: where an app's own parts of it sit.
+ * @typedef {object} DbTestsSwitch
+ * @property {string} lists the file an app's existing tests are listed in
+ * @property {string} exceptions the file holding the stop's exceptions; it exports `STOP_EXCEPTIONS`
+ * @property {string} rule the doc a finding points to
+ * @property {RegExp} [files] which test files are database tests; `/\.db\.test\.ts$/` by default
+ * @property {string[]} [roots] the folders they live under; `["src"]` by default
+ */
+
+/**
  * @typedef {object} ChecksConfig
  * @property {string} name lower-case letters, digits and dashes, starting with a letter
  * @property {string[]} [ratchets] globs of the tests that read the source as text and run whole
+ * @property {{ dbTests?: DbTestsSwitch }} [checks] the package's checks this app turns on; each ships off
  * @property {CheckConfig} check
  * @property {VerifyConfig} verify
  */
@@ -64,6 +78,7 @@ export const CONFIG_FILE = "checks.config.mjs";
  * @typedef {object} ResolvedConfig
  * @property {string} name
  * @property {string[]} ratchets
+ * @property {{ dbTests: Required<DbTestsSwitch> | null }} checks
  * @property {{ requires: { path: string, message: string }[], steps: (Step | "tests")[], tests: { workerMemory: string, parentHeapMb: number } }} check
  * @property {{ first: Lane[], lanes: Lane[], chain: string, summary: RegExp }} verify
  * @property {string} gateFolder
@@ -73,6 +88,8 @@ export const CONFIG_FILE = "checks.config.mjs";
 export const DEFAULT_RATCHETS = ["src/test/**/*.test.ts"];
 export const DEFAULT_CHAIN = "pnpm verify:chain";
 export const DEFAULT_SUMMARY = /ratchet passed|Test Files|Tests {2}/;
+export const DEFAULT_DB_TESTS_FILES = /\.db\.test\.ts$/;
+export const DEFAULT_DB_TESTS_ROOTS = ["src"];
 
 /** A mistake in an app's `checks.config.mjs`. The runners print it and exit 2. */
 export class ChecksConfigError extends Error {
@@ -113,7 +130,9 @@ export function defineConfig(config) {
 
 /** The keys the schema names, level by level. */
 const SHAPE = {
-  "": ["name", "ratchets", "check", "verify"],
+  "": ["name", "ratchets", "checks", "check", "verify"],
+  checks: ["dbTests"],
+  "checks.dbTests": ["lists", "exceptions", "rule", "files", "roots"],
   check: ["requires", "steps", "tests"],
   "check.tests": ["workerMemory", "parentHeapMb"],
   verify: ["first", "lanes", "chain", "summary"],
@@ -162,6 +181,33 @@ function unknownKeys(config) {
 
 /** @param {unknown} value @returns {value is string} */
 const isText = (value) => typeof value === "string" && value.trim().length > 0;
+
+/**
+ * A pattern `test()` can use for one path after another: `g` and `y` make it remember where it
+ * stopped.
+ * @param {RegExp} pattern
+ */
+const stateless = (pattern) => new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, ""));
+
+/**
+ * The database tests check's switch, checked and with its defaults filled; null when it is off.
+ * @param {unknown} checks
+ * @returns {Required<DbTestsSwitch> | null}
+ */
+function resolveDbTests(checks) {
+  const on = isRecord(checks) ? checks.dbTests : undefined;
+  if (on === undefined) return null;
+  if (!isRecord(on) || !isText(on.lists) || !isText(on.exceptions) || !isText(on.rule)) {
+    refuse("checks.dbTests needs lists, exceptions and rule");
+  }
+  const files = on.files ?? DEFAULT_DB_TESTS_FILES;
+  if (!(files instanceof RegExp)) refuse("checks.dbTests.files must be a regular expression");
+  const roots = on.roots ?? DEFAULT_DB_TESTS_ROOTS;
+  if (!Array.isArray(roots) || roots.length === 0 || !roots.every(isText)) {
+    refuse("checks.dbTests.roots must list at least one folder");
+  }
+  return { lists: on.lists, exceptions: on.exceptions, rule: on.rule, files: stateless(files), roots };
+}
 
 /**
  * An app's config, checked and with every default filled.
@@ -239,12 +285,12 @@ export function resolveConfig(config) {
   if (!isText(chain)) refuse("verify.chain must be a command");
   const given = verify.summary ?? DEFAULT_SUMMARY;
   if (!(given instanceof RegExp)) refuse("verify.summary must be a regular expression");
-  // `g` and `y` make `test()` remember where it stopped, so a line after a match would be skipped.
-  const summary = new RegExp(given.source, given.flags.replace(/[gy]/g, ""));
+  const summary = stateless(given);
 
   return {
     name: config.name,
     ratchets,
+    checks: { dbTests: resolveDbTests(config.checks) },
     check: { requires, steps, tests },
     verify: { first, lanes, chain, summary },
     ...names,
