@@ -235,16 +235,26 @@ export function analyzeDbTestSources(sources, where, change = null) {
   return { files, change, where };
 }
 
-/** @param {string} root @param {readonly string[]} roots @param {RegExp} files */
-function listed(root, roots, files) {
+/**
+ * What the check reads, as a question about one path: the discovery and the count must agree, or a
+ * file the discovery leaves out would come off the count.
+ * @param {RegExp} files
+ * @param {readonly string[]} roots
+ * @returns {(path: string) => boolean}
+ */
+function readsAs(files, roots) {
+  const folders = roots.map((root) => `${root.replace(/\/+$/, "")}/`);
+  return (path) => files.test(path) && !DOT_FOLDER.test(path) && folders.some((folder) => path.startsWith(folder));
+}
+
+/** @param {string} root @param {readonly string[]} roots @param {(path: string) => boolean} isDbTest */
+function listed(root, roots, isDbTest) {
   const paths = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...roots], {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
-  return [...new Set(paths.split("\0"))].filter(
-    (path) => files.test(path) && !DOT_FOLDER.test(path) && existsSync(join(root, path))
-  );
+  return [...new Set(paths.split("\0"))].filter((path) => isDbTest(path) && existsSync(join(root, path)));
 }
 
 /** @param {DbTestFile} file */
@@ -255,10 +265,10 @@ const casesIn = ({ tests }) => tests.reduce((sum, { cases }) => sum + cases, 0);
  * @param {readonly string[]} touched
  * @param {readonly DbTestFile[]} today
  * @param {(path: string) => string | null} textAtBase
- * @param {RegExp} [files]
+ * @param {(path: string) => boolean} [isDbTest]
  */
-export function newDbTests(touched, today, textAtBase, files = DEFAULT_DB_TESTS_FILES) {
-  const paths = touched.filter((path) => files.test(path));
+export function newDbTests(touched, today, textAtBase, isDbTest = (path) => DEFAULT_DB_TESTS_FILES.test(path)) {
+  const paths = touched.filter(isDbTest);
   const held = new Map(today.map((file) => [file.path, file]));
   let added = 0;
   for (const path of paths) {
@@ -281,9 +291,10 @@ export function analyzeDbTests(config, { root = process.cwd(), env = process.env
   const { lists, exceptions, rule, files, roots } = on;
   const { countBase, loadGitBaselineExport } = gitBaseline(config);
   const base = countBase({ env, cwd: root });
+  const isDbTest = readsAs(files, roots);
   return analysisCache(config).cachedAnalysis("db-tests", root, { base }, () => {
     const sources = Object.fromEntries(
-      listed(root, roots, files).map((path) => [path, readFileSync(join(root, path), "utf8")])
+      listed(root, roots, isDbTest).map((path) => [path, readFileSync(join(root, path), "utf8")])
     );
     const analysis = analyzeDbTestSources(sources, { lists, exceptions, rule });
     if (base === null) return analysis;
@@ -291,7 +302,7 @@ export function analyzeDbTests(config, { root = process.cwd(), env = process.env
       changesSince(base, { cwd: root }).touched,
       analysis.files,
       (path) => atBase(base, path, { cwd: root }),
-      files
+      isDbTest
     );
     const held = atBase(base, exceptions, { cwd: root }) !== null;
     /** @type {readonly StopException[]} */

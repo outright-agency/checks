@@ -201,6 +201,16 @@ describe("the reading of an app's tree", () => {
     expect(analysis.where).toEqual(WHERE);
   });
 
+  it("counts only what it reads: nothing outside the roots or under a dot-folder comes off the count", () => {
+    const root = scratchRepo(CONFIG, { "packages/a.db.test.ts": SENDS, "src/.copy/b.db.test.ts": SENDS });
+    git(root, "checkout", "-q", "-b", "work");
+    writeFileSync(join(root, "packages/a.db.test.ts"), `${SENDS}// edited\n`);
+    writeFileSync(join(root, "src/.copy/b.db.test.ts"), `${SENDS}// edited\n`);
+    writeFileSync(join(root, "src/c.db.test.ts"), `${SENDS}${SENDS}`);
+    commitAll(root, "two more, and edits out of reach");
+    expect(analyzeDbTests(config(), { root, env }).change?.added).toBe(2);
+  });
+
   it("reads no exceptions at a base that has no such file", () => {
     const root = scratchRepo(CONFIG, { "src/a.db.test.ts": SENDS });
     expect(analyzeDbTests(config(), { root, env }).change?.exceptionsAtBase).toEqual([]);

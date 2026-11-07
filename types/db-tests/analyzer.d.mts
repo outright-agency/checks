@@ -17,9 +17,9 @@ export function analyzeDbTestSources(sources: Readonly<Record<string, string>>, 
  * @param {readonly string[]} touched
  * @param {readonly DbTestFile[]} today
  * @param {(path: string) => string | null} textAtBase
- * @param {RegExp} [files]
+ * @param {(path: string) => boolean} [isDbTest]
  */
-export function newDbTests(touched: readonly string[], today: readonly DbTestFile[], textAtBase: (path: string) => string | null, files?: RegExp): number;
+export function newDbTests(touched: readonly string[], today: readonly DbTestFile[], textAtBase: (path: string) => string | null, isDbTest?: (path: string) => boolean): number;
 /**
  * The tree's database tests, and what the change adds against its base.
  * @param {import("../config.mjs").ChecksConfig} config the app's `checks.config.mjs`

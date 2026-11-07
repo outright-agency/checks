@@ -41,7 +41,7 @@ pnpm add -D github:outright-agency/checks#v0.3.0
 - Node 22.12 or later: the package is ES modules only, and an app without `"type": "module"`
   loads it through Node's `require(esm)`.
 - Peer dependencies: `vitest` 4.1.5 or later (below 5); optionally `typescript` 5 or later (for
-  `git-baseline` and the tests check) and `@testing-library/react`.
+  `git-baseline`, the tests check and the database tests check) and `@testing-library/react`.
 - No build step: what is in the repository is what runs, with its declarations in `types/`.
 - TypeScript finds the declarations through `exports`, so the app's `moduleResolution` is
   `bundler`, `node16` or `nodenext`; importing `checks.config.mjs` from TypeScript needs `allowJs`.
