@@ -87,6 +87,8 @@ function added(exceptions, atBase) {
  * @returns {DbTestsFinding[]}
  */
 export function evaluateDbTests(analysis, { debt, exceptions, limit }) {
+  // With no number, both of the stop's comparisons are false and it judges nothing, unseen.
+  if (!Number.isFinite(limit)) throw new Error(`the database tests check needs a limit: got ${limit}`);
   const { lists: listsAt, exceptions: exceptionsAt, rule: ruleAt } = analysis.where;
   /** @type {DbTestsFinding[]} */
   const findings = [];

@@ -146,6 +146,14 @@ describe("the database tests check — the stop", () => {
     expect(texts[3]).toContain(WHERE.rule);
   });
 
+  it("refuses a limit that is no number, which would turn the stop off unseen", () => {
+    const given = /** @type {DbTestsLists} */ (/** @type {unknown} */ ({ debt: [], exceptions: [] }));
+    expect(() => evaluateDbTests(analyzeDbTestSources({ [PATH]: LINE + SENDS }, WHERE), given)).toThrow(
+      "the database tests check needs a limit: got undefined"
+    );
+    expect(() => judged(PAST, [], [], Number.NaN)).toThrow("the database tests check needs a limit: got NaN");
+  });
+
   it("names an issue that is no key", () => {
     expect(rules(SENDS, lists([{ ...noReason, issue: "nope" }]))).toEqual(["unnamed-debt"]);
   });

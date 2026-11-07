@@ -195,7 +195,9 @@ const stateless = (pattern) => new RegExp(pattern.source, pattern.flags.replace(
  * @returns {Required<DbTestsSwitch> | null}
  */
 function resolveDbTests(checks) {
-  const on = isRecord(checks) ? checks.dbTests : undefined;
+  if (checks === undefined) return null;
+  if (!isRecord(checks)) refuse("checks must be an object");
+  const on = checks.dbTests;
   if (on === undefined) return null;
   if (!isRecord(on) || !isText(on.lists) || !isText(on.exceptions) || !isText(on.rule)) {
     refuse("checks.dbTests needs lists, exceptions and rule");

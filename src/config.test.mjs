@@ -114,6 +114,12 @@ describe("a check of the package's", () => {
     expect(files?.flags).toBe("");
   });
 
+  it("refuses checks that aren't an object, so nothing reads as off by mistake", () => {
+    for (const checks of [[], "dbTests", true, null]) {
+      expect(() => resolved(checks), JSON.stringify(checks)).toThrow("checks must be an object");
+    }
+  });
+
   it("refuses a check it doesn't know, so a typo can't leave one off", () => {
     expect(() => resolved({ dbTest: dbTests })).toThrow("unknown key checks.dbTest");
   });
