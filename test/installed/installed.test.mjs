@@ -95,6 +95,7 @@ describe("the package, installed from git", () => {
     const { code, output } = inApp("pnpm", ["exec", "tsx", "scripts/ratchets.ts"]);
     expect(output).toContain("Files ratchet passed (3 files, src/sum.ts, fixture-app).");
     expect(output).toContain("Tests ratchet passed (4 test files, 1 in a DOM).");
+    expect(output).toContain("Database tests ratchet passed (0 files, 0 findings).");
     expect(code).toBe(0);
   }, RUN_BUDGET_MS);
 
@@ -114,6 +115,20 @@ describe("the package, installed from git", () => {
     );
     expect(output).toContain("Two test files ran in one VM context");
     expect(code).not.toBe(0);
+  }, RUN_BUDGET_MS);
+
+  it("lets a project share a process from node_modules", () => {
+    const { code, output } = inApp("pnpm", [
+      "exec",
+      "vitest",
+      "run",
+      "--config",
+      "vitest.shared.config.ts",
+      "--project",
+      "shared",
+    ]);
+    expect(output).toContain("2 passed");
+    expect(code).toBe(0);
   }, RUN_BUDGET_MS);
 
   it("leaves a receipt through the installed verify", () => {

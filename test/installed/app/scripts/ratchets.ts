@@ -1,5 +1,6 @@
 // The app's ratchets as a command, run by tsx in an app without a module type.
 import { readdirSync } from "node:fs";
+import { analyzeDbTests, evaluateDbTests } from "@outright/checks/db-tests";
 import { gitBaseline } from "@outright/checks/git-baseline";
 import { runRatchets } from "@outright/checks/ratchets";
 import { analyzeTests, evaluateTests, formatTestsFindings } from "@outright/checks/tests-check";
@@ -27,5 +28,13 @@ process.exitCode = runRatchets({
     }
     console.log(`Tests ratchet passed (${checked.files} test files, ${checked.jsdomFiles} in a DOM).`);
     return true;
+  },
+  "db-tests": () => {
+    // Off in this app's config, and turned on here as an app turns it on in its own.
+    const dbTests = { lists: "src/test/lists.ts", exceptions: "src/test/exceptions.ts", rule: "README.md" };
+    const analysis = analyzeDbTests({ ...checks, checks: { dbTests } });
+    const findings = evaluateDbTests(analysis, { debt: [], exceptions: [], limit: 30 });
+    console.log(`Database tests ratchet passed (${analysis.files.length} files, ${findings.length} findings).`);
+    return findings.length === 0;
   },
 });
