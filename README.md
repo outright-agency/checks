@@ -15,7 +15,7 @@ verify` before a change lands, a Vitest preset, and the CI steps. An app install
 pinned to a tag:
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.2.1
+pnpm add -D github:outright-agency/checks#v0.3.0
 ```
 
 and declares its own checks in `checks.config.mjs` at its root:
@@ -35,7 +35,7 @@ The sections below cover each part in full.
 ## Install
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.2.1
+pnpm add -D github:outright-agency/checks#v0.3.0
 ```
 
 - Node 22.12 or later: the package is ES modules only, and an app without `"type": "module"`
@@ -80,6 +80,7 @@ export default defineConfig({
 | --- | --- | --- |
 | `name` | (required) | Lower-case letters, digits and dashes, starting with a letter. It names the gate folder and the environment variables below. |
 | `ratchets` | `["src/test/**/*.test.ts"]` | Globs of the tests that read the source as text: no import graph relates them to a change, so they run whole (the `ratchets` project). Every other test is in the `app` project. |
+| `checks.dbTests` | off | Turns on the database tests check, with where the app's own parts of it sit: `lists`, `exceptions` and `rule`, and `files` and `roots` where they aren't `/\.db\.test\.ts$/` and `["src"]`. A check ships switched off: raising the pin turns nothing on. |
 | `check.requires` | `[]` | `{ path, message }`: files that must exist before the check runs anything (a dependency a step needs). A missing one prints its message and exits 1. |
 | `check.steps` | (required) | The inner loop's steps, in order. A step is `{ name, run }`: `run` is a shell command, or a function `({ changed }) => command \| null` that picks a command from the paths the change touched (`null`: the step sits this change out). `"tests"` marks the built-in test step's place. |
 | `check.tests.workerMemory` | `"512MB"` | Where the check's test workers recycle. |
@@ -165,6 +166,12 @@ export default mergeConfig(
   project's own setting. So a project whose files must run one at a time (they empty a database
   their neighbours use) says so in Vitest's own words, `fileParallelism: false` (or
   `maxWorkers: 1`), on a process pool (`pool: "forks"`), and keeps it whatever the variable says.
+- **A project that shares a process.** A project whose files may share one says so in Vitest's own
+  words, `isolate: false` on a process pool (`pool: "forks"`), and the preset marks it, so the setup
+  file leaves it alone. Its files then share every module and every global, so what they leave
+  behind is the project's to answer for. `isolate: false` with no pool of its own stays on the VM
+  pool, where it means nothing, and keeps the setup file's refusal. A second config that does not
+  use the preset gets no mark.
 - **Time.** 5 s a test, 15 s under `CI`. Testing Library's waits get 3 s under `CI` (1 s, its
   own default, elsewhere).
 - **Reruns.** `--changed` reruns every test when `package.json`, the lockfile, the Vitest config,
@@ -206,9 +213,12 @@ export const { resolveRatchetBase, loadGitBaselineExport, withCurrentPathKeys } 
   inputs, compute)` computes a ratchet's analysis once per repository state (keyed by content,
   never time) and shares it between processes.
 - **`@outright/checks/git-baseline`**: `resolveRatchetBase()` (CI's base, else the merge base with
-  `main`), `baselineExistsAtBase()`, `loadGitBaselineExport()` (a baseline as it stood at the
-  base, data only), and `withCurrentPathKeys()` / `toCurrentPathSpelling()`, which spell a
-  historical subject through the app's moved folders.
+  `main`), `ratchetBase()` (that, or none on a run by hand that names none), `countBase()` (where a
+  change's own count starts: the later fork when a local `main` lags `origin/main`),
+  `baselineExistsAtBase()`, `atBase()` (a file as it stood there), `changesSince()` (what a change
+  renames and touches), `loadGitBaselineExport()` (a baseline as it stood at the base, data only),
+  and `withCurrentPathKeys()` / `toCurrentPathSpelling()`, which spell a historical subject through
+  the app's moved folders.
 - **`@outright/checks/check-hygiene`**: checks for the checks — exact counts in a scan test, scoped
   gates that reach the whole suite (`scopedGatesReachingTheSuite(scripts, { notScoped, pathRoots })`),
   rules no fixture makes fire. The app's live test calls them on its own tree.
@@ -271,6 +281,75 @@ Reviewed debt is exact: `{ debt: [{ path, rule, count, issue, reason }] }`, `cou
 `rule` in `path`. A file with more findings than its entry names reports them all, so the new one
 shows; an app with no debt passes no baseline.
 
+## The database tests check
+
+`@outright/checks/db-tests` holds what a database test owes: a file says what only a database
+proves, a test in one sends it something, and a change adds no more than the app's limit. It needs
+`typescript`.
+
+It ships switched off. An app turns it on in two steps, its existing tests listed so nothing that
+runs today goes red: `checks.dbTests` in its config, and a live test, which is what runs it. The key
+with no live test runs nothing; a live test with no key throws.
+
+```js
+// checks.config.mjs
+checks: {
+  dbTests: {
+    lists: "src/test/db-tests/baseline.ts",
+    exceptions: "src/test/db-tests/stop-exceptions.ts",
+    rule: "docs/test-rule.md",
+  },
+},
+```
+
+```ts
+// src/test/db-tests/live.test.ts
+import { analyzeDbTests, evaluateDbTests, formatDbTestsFindings } from "@outright/checks/db-tests";
+import { describe, expect, it } from "vitest";
+import checks from "../../../checks.config.mjs";
+import { DEBT } from "./baseline";
+import { MAX_NEW_DB_TESTS, STOP_EXCEPTIONS } from "./stop-exceptions";
+
+const analysis = analyzeDbTests(checks);
+const findings = evaluateDbTests(analysis, { debt: DEBT, exceptions: STOP_EXCEPTIONS, limit: MAX_NEW_DB_TESTS });
+
+describe("database tests check (live)", () => {
+  it("reads every database test, non-vacuously", () => {
+    expect(analysis.files.length).toBeGreaterThan(30);
+  });
+
+  it("holds every file and test to the rule", () => {
+    expect(formatDbTestsFindings(findings)).toBe("");
+  });
+});
+```
+
+- **`analyzeDbTests(config, { root?, env? })`** reads, as text, every file matching `files` under
+  `roots` that git sees, and counts what the change adds, against `countBase()`. A path under a
+  dot-folder is a copy, never read. It throws for an app that has not turned the check on.
+- **`evaluateDbTests(analysis, { debt, exceptions, limit })`** returns the findings. The limit, the
+  debt and the exceptions are the app's: nothing here holds a number of its own.
+- **`formatDbTestsFindings(findings)`** prints each finding with its place.
+
+The rules (`DB_TESTS_RULES`):
+
+| Rule | Fires on | Instead |
+| --- | --- | --- |
+| `db-test-no-reason` | a file with no line `// Only a database proves: <what>`, three words or more, at the start of a line | say what only a database proves, or make it a plain test |
+| `db-test-sends-nothing` | a test that neither awaits nor returns a promise | a plain test, or an assertion in a test that sends |
+| `stale-debt` | a list's entry that excuses nothing | take it off |
+| `unnamed-debt` | a list's entry with no issue key or no reason | name both |
+| `stop-exception-unnamed` | an exception with no issue key or no reason | name both |
+| `db-tests-past-the-stop` | a change with more new tests than the limit, and no exception of its own | keep what a database alone proves, or add an exception |
+| `stop-exception-unused` | an exception a change adds that it doesn't need | take it off |
+
+An entry of the debt is `{ rule: "db-test-no-reason", path, issue, reason }` or
+`{ rule: "db-test-sends-nothing", path, test, issue, reason }`, the test held by its title. An
+exception is `{ tests, issue, reason }`: it excuses only the change that adds it, and stays as the
+record. The file `exceptions` names exports them as `STOP_EXCEPTIONS`, read as it stood at the base,
+so it holds data alone. A count nets a move or a rename to nothing, and a table's written rows each
+count one. Whether a line is true stays a review's question.
+
 ## The CI steps
 
 ```yaml
@@ -278,7 +357,7 @@ steps:
   - uses: actions/checkout@v7
     with:
       fetch-depth: 2
-  - uses: outright-agency/checks/actions/ci-setup@v0.2.1
+  - uses: outright-agency/checks/actions/ci-setup@v0.3.0
     with:
       name: my-app
   - run: pnpm exec vitest run --project app --changed "$MY_APP_RATCHET_BASE_SHA"
