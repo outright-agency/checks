@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+The database groups check, switched off. An app that raises its pin sees nothing turned on, and
+its config keeps working as it is.
+
+- `@outright/checks/db-groups`, turned on with `checks.dbGroups`: a database test file that fakes
+  or changes global state keeps a process of its own, a file that truncates runs alone, and no
+  other file does. `analyzeDbGroups(config, { root })`, `evaluateDbGroups(analysis, { apart,
+  alone })`, `formatDbGroupsFindings` and seven rules (`DB_GROUPS_RULES`).
+- The app's own words reach it only through `checks.dbGroups`: what installs, what collects from a
+  list and its own list, what writes to a registry, what only declares, its helpers' folders, its
+  import prefixes and its setup module. Its lists come from its live test.
+
 ## 0.3.0
 
 A project that shares a process, and a check that ships switched off. An app that raises its pin

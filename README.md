@@ -15,7 +15,7 @@ verify` before a change lands, a Vitest preset, and the CI steps. An app install
 pinned to a tag:
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.3.0
+pnpm add -D github:outright-agency/checks#v0.4.0
 ```
 
 and declares its own checks in `checks.config.mjs` at its root:
@@ -35,13 +35,13 @@ The sections below cover each part in full.
 ## Install
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.3.0
+pnpm add -D github:outright-agency/checks#v0.4.0
 ```
 
 - Node 22.12 or later: the package is ES modules only, and an app without `"type": "module"`
   loads it through Node's `require(esm)`.
 - Peer dependencies: `vitest` 4.1.5 or later (below 5); optionally `typescript` 5 or later (for
-  `git-baseline`, the tests check and the database tests check) and `@testing-library/react`.
+  `git-baseline`, the tests check and the two database checks) and `@testing-library/react`.
 - No build step: what is in the repository is what runs, with its declarations in `types/`.
 - TypeScript finds the declarations through `exports`, so the app's `moduleResolution` is
   `bundler`, `node16` or `nodenext`; importing `checks.config.mjs` from TypeScript needs `allowJs`.
@@ -81,6 +81,7 @@ export default defineConfig({
 | `name` | (required) | Lower-case letters, digits and dashes, starting with a letter. It names the gate folder and the environment variables below. |
 | `ratchets` | `["src/test/**/*.test.ts"]` | Globs of the tests that read the source as text: no import graph relates them to a change, so they run whole (the `ratchets` project). Every other test is in the `app` project. |
 | `checks.dbTests` | off | Turns on the database tests check, with where the app's own parts of it sit: `lists`, `exceptions` and `rule`, and `files` and `roots` where they aren't `/\.db\.test\.ts$/` and `["src"]`. A check ships switched off: raising the pin turns nothing on. |
+| `checks.dbGroups` | off | Turns on the database groups check, with the app's own words: `lists` (required), and `setup`, `helpers`, `aliases`, `installs`, `collects`, `ownList`, `writes`, `declares`, `files` and `roots` where it has them (below). |
 | `check.requires` | `[]` | `{ path, message }`: files that must exist before the check runs anything (a dependency a step needs). A missing one prints its message and exits 1. |
 | `check.steps` | (required) | The inner loop's steps, in order. A step is `{ name, run }`: `run` is a shell command, or a function `({ changed }) => command \| null` that picks a command from the paths the change touched (`null`: the step sits this change out). `"tests"` marks the built-in test step's place. |
 | `check.tests.workerMemory` | `"512MB"` | Where the check's test workers recycle. |
@@ -350,6 +351,98 @@ record. The file `exceptions` names exports them as `STOP_EXCEPTIONS`, read as i
 so it holds data alone. A count nets a move or a rename to nothing, and a table's written rows each
 count one. Whether a line is true stays a review's question.
 
+## The database groups check
+
+`@outright/checks/db-groups` holds what lets database test files share a process: a file that fakes
+or changes global state keeps a process of its own, a file that truncates runs alone, and no other
+file does. The app's lists of those files feed its own Vitest projects, which the package does not
+build; this check holds the lists equal to what the source shows, both ways. It needs `typescript`.
+
+It ships switched off. An app turns it on in two steps: `checks.dbGroups` in its config, with its
+own words, and a live test, which hands it the lists and is what runs it. The key with no live test
+runs nothing; a live test with no key throws.
+
+```js
+// checks.config.mjs
+checks: {
+  dbGroups: {
+    lists: "src/test/db-groups/apart.ts",
+    setup: "src/app/setup.ts",
+    helpers: ["src/test/"],
+    aliases: { "@/": "src/" },
+    installs: ["install"],
+    collects: ["collectPlugins"],
+    ownList: "PLUGINS",
+    writes: ["registry.register"],
+    declares: /^define[A-Z]/,
+  },
+},
+```
+
+```ts
+// src/test/db-groups/live.test.ts
+import { analyzeDbGroups, evaluateDbGroups, formatDbGroupsFindings } from "@outright/checks/db-groups";
+import { describe, expect, it } from "vitest";
+import checks from "../../../checks.config.mjs";
+import { KEPT_APART, RUNS_ALONE } from "./apart";
+
+const analysis = analyzeDbGroups(checks);
+
+describe("database groups check (live)", () => {
+  it("reads every database test, non-vacuously", () => {
+    expect(analysis.files.length).toBeGreaterThan(30);
+  });
+
+  it("keeps apart exactly the files that fake or change global state", () => {
+    expect(formatDbGroupsFindings(evaluateDbGroups(analysis, { apart: KEPT_APART, alone: RUNS_ALONE }))).toBe("");
+  });
+});
+```
+
+| Key | Default | What it is |
+| --- | --- | --- |
+| `lists` | (required) | The file the app's lists sit in; every finding names it. |
+| `setup` | none | The one app module that may install at load: what the shared group's setup file loads. With none, every module that installs at load is named. |
+| `helpers` | `[]` | Folders of test helpers, beyond `*.test.ts(x)` files and `__tests__/` folders, inside the repository (`./src/test` is `src/test/`). |
+| `aliases` | `{}` | An import's prefix and the folder it stands for, inside the repository; the longest prefix is tried first. |
+| `installs` | `[]` | Methods that install what they are handed: a call to one changes global state. |
+| `collects` | `[]` | Functions that collect from a list and install it: a call changes global state, unless its list is `ownList`. |
+| `ownList` | none | The app's own list, which the shared setup installs. |
+| `writes` | `[]` | `object.method` calls that write to a registry when handed what to keep (a second argument), or called on their own; with only their first argument, as a value handed on, they declare. |
+| `declares` | none | A call at a file's top whose name matches only declares: it adds to a registry and changes nothing already there. |
+| `files` | `/\.db\.test\.ts$/` | Which TypeScript test files are database tests: a file this reads as a test file ends `.test.ts` or `.test.tsx`, whatever this says. |
+| `roots` | `["src"]` | The folders read. A path under a dot-folder is a copy, never read. |
+
+What it reads, by syntax tree, in a database test file and every test helper it reaches through
+imports, re-exports and `import()` (it ends at app code, and skips what only a type needs):
+
+- **A fake**: any use of Vitest's `vi` but `vi.fn`, `vi.waitFor` and `vi.waitUntil`, however it is
+  named or reached, or a way into Vitest it can't read.
+- **Global state**: a call of the app's words above; a call at a file's top that is no test, hook or
+  declaration; a write to a global or onto an imported object, a change through its own methods,
+  `Object` and `Reflect` writers; a listener or any other call on `process` but a read;
+  `expect.extend` and its kin, `chai.use`; an `import()` or `require` of a built path.
+- **A truncate**: SQL that says `TRUNCATE`, in a string or a template.
+- **Install at load**: an app module, outside `setup`, that calls one of `installs` at its top.
+
+- **`analyzeDbGroups(config, { root? })`** reads every code file git sees under `roots`. It throws
+  for an app that has not turned the check on.
+- **`evaluateDbGroups(analysis, { apart, alone })`** returns the findings: `apart` is the files kept
+  apart, a process each, and `alone` the files that run alone.
+- **`formatDbGroupsFindings(findings)`** prints each finding as `rule: detail`.
+
+The rules (`DB_GROUPS_RULES`):
+
+| Rule | Fires on | Instead |
+| --- | --- | --- |
+| `shared-fake` | a shared file that fakes, itself or through a helper | list it apart |
+| `shared-global-state` | a shared file that changes global state, itself or through a helper | list it apart |
+| `apart-excuses-nothing` | a file listed apart that does neither | take it off, so it shares a process |
+| `apart-not-a-file` | a listed path that is no database test file | take it off |
+| `truncate-not-alone` | a file that truncates and doesn't run alone | list it to run alone |
+| `alone-excuses-nothing` | a file listed to run alone that truncates nothing | take it off |
+| `install-at-load` | an app module outside `setup` that installs at load | install it from `setup` |
+
 ## The CI steps
 
 ```yaml
@@ -357,7 +450,7 @@ steps:
   - uses: actions/checkout@v7
     with:
       fetch-depth: 2
-  - uses: outright-agency/checks/actions/ci-setup@v0.3.0
+  - uses: outright-agency/checks/actions/ci-setup@v0.4.0
     with:
       name: my-app
   - run: pnpm exec vitest run --project app --changed "$MY_APP_RATCHET_BASE_SHA"

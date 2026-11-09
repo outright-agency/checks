@@ -24,7 +24,7 @@ describe("a check ships switched off", () => {
 
   it("runs no check by itself, so raising the pin turns none on", () => {
     const importing = RUNS_BY_ITSELF.filter((path) =>
-      /(?:tests-check|db-tests)[/"']/.test(readFileSync(join(ROOT, path), "utf8"))
+      /(?:tests-check|db-tests|db-groups)[/"']/.test(readFileSync(join(ROOT, path), "utf8"))
     );
     expect(importing).toEqual([]);
   });
