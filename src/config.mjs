@@ -60,10 +60,29 @@ export const CONFIG_FILE = "checks.config.mjs";
  */
 
 /**
+ * The database groups check, turned on: what is the app's own of it. The app's words reach the
+ * check only through here, so the package names none of them.
+ * @typedef {object} DbGroupsSwitch
+ * @property {string} lists the file the app's lists of files kept apart and run alone sit in; a finding names it
+ * @property {string} [setup] the one app module that may install at load: what the shared group's setup loads
+ * @property {string[]} [helpers] folders of test helpers, beyond `*.test.*` files and `__tests__/` folders
+ * @property {Record<string, string>} [aliases] an import's prefix and the folder it stands for, as `{ "~/": "src/" }`
+ * @property {string[]} [installs] methods that install what they are handed: a call to one changes global state
+ * @property {string[]} [collects] functions that collect from a list and install it: a call changes global state, but for `ownList`
+ * @property {string} [ownList] the app's own list, which the shared setup installs: collecting it changes nothing
+ * @property {string[]} [writes] `object.method` calls that write to a registry when handed what to keep, or called as a statement
+ * @property {RegExp} [declares] a call at load whose name matches only declares (adds to a registry, changes nothing there): harmless at load
+ * @property {RegExp} [files] which test files are database tests; `/\.db\.test\.ts$/` by default
+ * @property {string[]} [roots] the folders the check reads; `["src"]` by default
+ */
+
+/** @typedef {Required<Omit<DbGroupsSwitch, "setup" | "ownList" | "declares">> & { setup: string | null, ownList: string | null, declares: RegExp | null }} DbGroupsOn */
+
+/**
  * @typedef {object} ChecksConfig
  * @property {string} name lower-case letters, digits and dashes, starting with a letter
  * @property {string[]} [ratchets] globs of the tests that read the source as text and run whole
- * @property {{ dbTests?: DbTestsSwitch }} [checks] the package's checks this app turns on; each ships off
+ * @property {{ dbTests?: DbTestsSwitch, dbGroups?: DbGroupsSwitch }} [checks] the package's checks this app turns on; each ships off
  * @property {CheckConfig} check
  * @property {VerifyConfig} verify
  */
@@ -78,7 +97,7 @@ export const CONFIG_FILE = "checks.config.mjs";
  * @typedef {object} ResolvedConfig
  * @property {string} name
  * @property {string[]} ratchets
- * @property {{ dbTests: Required<DbTestsSwitch> | null }} checks
+ * @property {{ dbTests: Required<DbTestsSwitch> | null, dbGroups: DbGroupsOn | null }} checks
  * @property {{ requires: { path: string, message: string }[], steps: (Step | "tests")[], tests: { workerMemory: string, parentHeapMb: number } }} check
  * @property {{ first: Lane[], lanes: Lane[], chain: string, summary: RegExp }} verify
  * @property {string} gateFolder
@@ -131,8 +150,9 @@ export function defineConfig(config) {
 /** The keys the schema names, level by level. */
 const SHAPE = {
   "": ["name", "ratchets", "checks", "check", "verify"],
-  checks: ["dbTests"],
+  checks: ["dbTests", "dbGroups"],
   "checks.dbTests": ["lists", "exceptions", "rule", "files", "roots"],
+  "checks.dbGroups": ["lists", "setup", "helpers", "aliases", "installs", "collects", "ownList", "writes", "declares", "files", "roots"],
   check: ["requires", "steps", "tests"],
   "check.tests": ["workerMemory", "parentHeapMb"],
   verify: ["first", "lanes", "chain", "summary"],
@@ -209,6 +229,72 @@ function resolveDbTests(checks) {
     refuse("checks.dbTests.roots must list at least one folder");
   }
   return { lists: on.lists, exceptions: on.exceptions, rule: on.rule, files: stateless(files), roots };
+}
+
+const NAME = /^[A-Za-z_$][\w$]*$/;
+const CALL = /^[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*$/;
+
+/** @param {string} folder */
+const slashed = (folder) => (folder.endsWith("/") ? folder : `${folder}/`);
+
+/**
+ * A list of names, or the default when absent.
+ * @param {unknown} value
+ * @param {RegExp} shape
+ * @param {string} message
+ * @returns {string[]}
+ */
+function namesIn(value, shape, message) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || !value.every((name) => typeof name === "string" && shape.test(name))) refuse(message);
+  return value;
+}
+
+/**
+ * The database groups check's switch, checked and with its defaults filled; null when it is off.
+ * @param {unknown} checks
+ * @returns {DbGroupsOn | null}
+ */
+function resolveDbGroups(checks) {
+  if (!isRecord(checks)) return null;
+  const on = checks.dbGroups;
+  if (on === undefined) return null;
+  if (!isRecord(on) || !isText(on.lists)) refuse("checks.dbGroups needs lists");
+  if (on.setup !== undefined && !isText(on.setup)) refuse("checks.dbGroups.setup must be a path");
+  const helpers = on.helpers ?? [];
+  if (!Array.isArray(helpers) || !helpers.every(isText)) refuse("checks.dbGroups.helpers must list folders");
+  const aliases = on.aliases ?? {};
+  if (!isRecord(aliases) || !Object.entries(aliases).every(([prefix, folder]) => isText(prefix) && isText(folder))) {
+    refuse("checks.dbGroups.aliases must map each prefix to a folder");
+  }
+  const installs = namesIn(on.installs, NAME, "checks.dbGroups.installs must list names");
+  const collects = namesIn(on.collects, NAME, "checks.dbGroups.collects must list names");
+  if (on.ownList !== undefined && !(typeof on.ownList === "string" && NAME.test(on.ownList))) {
+    refuse("checks.dbGroups.ownList must be a name");
+  }
+  const writes = namesIn(on.writes, CALL, "checks.dbGroups.writes must list calls as object.method");
+  if (on.declares !== undefined && !(on.declares instanceof RegExp)) refuse("checks.dbGroups.declares must be a regular expression");
+  const files = on.files ?? DEFAULT_DB_TESTS_FILES;
+  if (!(files instanceof RegExp)) refuse("checks.dbGroups.files must be a regular expression");
+  const roots = on.roots ?? DEFAULT_DB_TESTS_ROOTS;
+  if (!Array.isArray(roots) || roots.length === 0 || !roots.every(isText)) {
+    refuse("checks.dbGroups.roots must list at least one folder");
+  }
+  return {
+    lists: on.lists,
+    setup: on.setup ?? null,
+    helpers: helpers.map(slashed),
+    aliases: Object.fromEntries(
+      Object.entries(/** @type {Record<string, string>} */ (aliases)).map(([prefix, folder]) => [slashed(prefix), slashed(folder)])
+    ),
+    installs,
+    collects,
+    ownList: /** @type {string | undefined} */ (on.ownList) ?? null,
+    writes,
+    declares: on.declares instanceof RegExp ? stateless(on.declares) : null,
+    files: stateless(files),
+    roots,
+  };
 }
 
 /**
@@ -292,7 +378,7 @@ export function resolveConfig(config) {
   return {
     name: config.name,
     ratchets,
-    checks: { dbTests: resolveDbTests(config.checks) },
+    checks: { dbTests: resolveDbTests(config.checks), dbGroups: resolveDbGroups(config.checks) },
     check: { requires, steps, tests },
     verify: { first, lanes, chain, summary },
     ...names,

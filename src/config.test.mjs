@@ -94,7 +94,7 @@ describe("a check of the package's", () => {
   const resolved = (checks) => resolveConfig(/** @type {any} */ (config({ checks })));
 
   it("leaves every check off when the config names none", () => {
-    expect(resolveConfig(/** @type {any} */ (config())).checks).toEqual({ dbTests: null });
+    expect(resolveConfig(/** @type {any} */ (config())).checks).toEqual({ dbTests: null, dbGroups: null });
   });
 
   it("fills a check's defaults when an app turns it on", () => {
@@ -144,6 +144,85 @@ describe("a check of the package's", () => {
     expect(() => resolved({ dbTests: { ...dbTests, roots: [] } })).toThrow(
       "checks.dbTests.roots must list at least one folder"
     );
+  });
+});
+
+describe("the database groups check's switch", () => {
+  const dbGroups = { lists: "a/groups.ts" };
+  /** @param {unknown} checks */
+  const resolved = (checks) => resolveConfig(/** @type {any} */ (config({ checks })));
+
+  it("leaves it off when the config names none", () => {
+    expect(resolveConfig(/** @type {any} */ (config())).checks.dbGroups).toBeNull();
+    expect(resolved({ dbTests: { lists: "a", exceptions: "b", rule: "c" } }).checks.dbGroups).toBeNull();
+  });
+
+  it("fills its defaults when an app turns it on", () => {
+    expect(resolved({ dbGroups }).checks.dbGroups).toEqual({
+      lists: "a/groups.ts",
+      setup: null,
+      helpers: [],
+      aliases: {},
+      installs: [],
+      collects: [],
+      ownList: null,
+      writes: [],
+      declares: null,
+      files: /\.db\.test\.ts$/,
+      roots: ["src"],
+    });
+  });
+
+  it("keeps an app's own words", () => {
+    const own = {
+      lists: "a/groups.ts",
+      setup: "src/app/setup.ts",
+      helpers: ["src/test/"],
+      aliases: { "~/": "src/" },
+      installs: ["mount"],
+      collects: ["gather"],
+      ownList: "ALL",
+      writes: ["registry.offer"],
+      declares: /^declare[A-Z]/,
+      files: /\.parity\.test\.ts$/,
+      roots: ["app"],
+    };
+    expect(resolved({ dbGroups: own }).checks.dbGroups).toEqual(own);
+  });
+
+  it("ends each folder and prefix with a slash", () => {
+    const on = resolved({ dbGroups: { ...dbGroups, helpers: ["src/test"], aliases: { "~": "src" } } }).checks.dbGroups;
+    expect(on?.helpers).toEqual(["src/test/"]);
+    expect(on?.aliases).toEqual({ "~/": "src/" });
+  });
+
+  it("strips the flags that make a pattern remember where it stopped", () => {
+    const on = resolved({ dbGroups: { ...dbGroups, files: /\.db\.test\.ts$/g, declares: /^define/y } }).checks.dbGroups;
+    expect(on?.files.flags).toBe("");
+    expect(on?.declares?.flags).toBe("");
+  });
+
+  it("refuses a check missing its lists", () => {
+    expect(() => resolved({ dbGroups: { setup: "a.ts" } })).toThrow("checks.dbGroups needs lists");
+  });
+
+  it("refuses an unknown key inside it", () => {
+    expect(() => resolved({ dbGroups: { ...dbGroups, install: ["x"] } })).toThrow("unknown key checks.dbGroups.install");
+  });
+
+  it.each([
+    [{ setup: "" }, "checks.dbGroups.setup must be a path"],
+    [{ helpers: "src/test/" }, "checks.dbGroups.helpers must list folders"],
+    [{ aliases: { "~/": 1 } }, "checks.dbGroups.aliases must map each prefix to a folder"],
+    [{ installs: ["a b"] }, "checks.dbGroups.installs must list names"],
+    [{ collects: [1] }, "checks.dbGroups.collects must list names"],
+    [{ ownList: "A.B" }, "checks.dbGroups.ownList must be a name"],
+    [{ writes: ["offer"] }, "checks.dbGroups.writes must list calls as object.method"],
+    [{ declares: "^define" }, "checks.dbGroups.declares must be a regular expression"],
+    [{ files: "*.db.test.ts" }, "checks.dbGroups.files must be a regular expression"],
+    [{ roots: [] }, "checks.dbGroups.roots must list at least one folder"],
+  ])("refuses %j", (given, message) => {
+    expect(() => resolved({ dbGroups: { ...dbGroups, ...given } })).toThrow(message);
   });
 });
 
