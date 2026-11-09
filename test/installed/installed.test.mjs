@@ -96,6 +96,7 @@ describe("the package, installed from git", () => {
     expect(output).toContain("Files ratchet passed (3 files, src/sum.ts, fixture-app).");
     expect(output).toContain("Tests ratchet passed (4 test files, 1 in a DOM).");
     expect(output).toContain("Database tests ratchet passed (0 files, 0 findings).");
+    expect(output).toContain("Database groups ratchet passed (0 files, 0 findings).");
     expect(code).toBe(0);
   }, RUN_BUDGET_MS);
 
