@@ -403,14 +403,14 @@ describe("database groups check (live)", () => {
 | --- | --- | --- |
 | `lists` | (required) | The file the app's lists sit in; every finding names it. |
 | `setup` | none | The one app module that may install at load: what the shared group's setup file loads. With none, every module that installs at load is named. |
-| `helpers` | `[]` | Folders of test helpers, beyond `*.test.ts(x)` files and `__tests__/` folders. |
-| `aliases` | `{}` | An import's prefix and the folder it stands for. |
+| `helpers` | `[]` | Folders of test helpers, beyond `*.test.ts(x)` files and `__tests__/` folders, inside the repository (`./src/test` is `src/test/`). |
+| `aliases` | `{}` | An import's prefix and the folder it stands for, inside the repository; the longest prefix is tried first. |
 | `installs` | `[]` | Methods that install what they are handed: a call to one changes global state. |
 | `collects` | `[]` | Functions that collect from a list and install it: a call changes global state, unless its list is `ownList`. |
 | `ownList` | none | The app's own list, which the shared setup installs. |
 | `writes` | `[]` | `object.method` calls that write to a registry when handed what to keep (a second argument), or called on their own; with only their first argument, as a value handed on, they declare. |
 | `declares` | none | A call at a file's top whose name matches only declares: it adds to a registry and changes nothing already there. |
-| `files` | `/\.db\.test\.ts$/` | Which test files are database tests. A `*.test.ts(x)` file is still a test helper whatever this says. |
+| `files` | `/\.db\.test\.ts$/` | Which TypeScript test files are database tests: a file this reads as a test file ends `.test.ts` or `.test.tsx`, whatever this says. |
 | `roots` | `["src"]` | The folders read. A path under a dot-folder is a copy, never read. |
 
 What it reads, by syntax tree, in a database test file and every test helper it reaches through

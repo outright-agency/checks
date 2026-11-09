@@ -12,7 +12,7 @@
 // on under `checks`, with what is its own, and its live test hands the engine its lists.
 
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CHECK_PARENT_HEAP_MB, CHECK_WORKER_MEMORY } from "./limits.mjs";
 
@@ -238,6 +238,17 @@ const CALL = /^[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*$/;
 const slashed = (folder) => (folder.endsWith("/") ? folder : `${folder}/`);
 
 /**
+ * A folder of the repository as git spells it, ending in a slash: `./src` is `src/`. Null for one
+ * outside it (`/…`, `../…`) or the root itself, which no path git lists starts with.
+ * @param {string} folder
+ */
+function repoFolder(folder) {
+  const clean = posix.normalize(folder);
+  if (clean.startsWith("/") || clean === "." || clean === "./" || clean.startsWith("../")) return null;
+  return slashed(clean.replace(/^\.\//, ""));
+}
+
+/**
  * A list of names, or the default when absent.
  * @param {unknown} value
  * @param {RegExp} shape
@@ -262,9 +273,14 @@ function resolveDbGroups(checks) {
   if (!isRecord(on) || !isText(on.lists)) refuse("checks.dbGroups needs lists");
   if (on.setup !== undefined && !isText(on.setup)) refuse("checks.dbGroups.setup must be a path");
   const helpers = on.helpers ?? [];
-  if (!Array.isArray(helpers) || !helpers.every(isText)) refuse("checks.dbGroups.helpers must list folders");
+  if (!Array.isArray(helpers) || !helpers.every((folder) => isText(folder) && repoFolder(folder) !== null)) {
+    refuse("checks.dbGroups.helpers must list folders");
+  }
   const aliases = on.aliases ?? {};
-  if (!isRecord(aliases) || !Object.entries(aliases).every(([prefix, folder]) => isText(prefix) && isText(folder))) {
+  if (
+    !isRecord(aliases) ||
+    !Object.entries(aliases).every(([prefix, folder]) => isText(prefix) && isText(folder) && repoFolder(folder) !== null)
+  ) {
     refuse("checks.dbGroups.aliases must map each prefix to a folder");
   }
   const installs = namesIn(on.installs, NAME, "checks.dbGroups.installs must list names");
@@ -283,9 +299,12 @@ function resolveDbGroups(checks) {
   return {
     lists: on.lists,
     setup: on.setup ?? null,
-    helpers: helpers.map(slashed),
+    helpers: helpers.map((folder) => /** @type {string} */ (repoFolder(folder))),
+    // The longest prefix first, so `@/lib/` is tried before `@/`.
     aliases: Object.fromEntries(
-      Object.entries(/** @type {Record<string, string>} */ (aliases)).map(([prefix, folder]) => [slashed(prefix), slashed(folder)])
+      Object.entries(/** @type {Record<string, string>} */ (aliases))
+        .map(([prefix, folder]) => [slashed(prefix), /** @type {string} */ (repoFolder(folder))])
+        .sort(([one], [other]) => other.length - one.length)
     ),
     installs,
     collects,

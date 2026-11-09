@@ -196,6 +196,21 @@ describe("the database groups check's switch", () => {
     expect(on?.aliases).toEqual({ "~/": "src/" });
   });
 
+  it("spells each folder as git does, whatever way the app writes it", () => {
+    const on = resolved({ dbGroups: { ...dbGroups, helpers: ["./src/test", "src//helpers/"], aliases: { "@/": "./src/" } } }).checks.dbGroups;
+    expect(on?.helpers).toEqual(["src/test/", "src/helpers/"]);
+    expect(on?.aliases).toEqual({ "@/": "src/" });
+  });
+
+  it("tries the longest prefix first", () => {
+    const on = resolved({ dbGroups: { ...dbGroups, aliases: { "@/": "src/", "@/lib/": "packages/lib/" } } }).checks.dbGroups;
+    expect(Object.keys(on?.aliases ?? {})).toEqual(["@/lib/", "@/"]);
+  });
+
+  it("refuses the check under a misspelt name", () => {
+    expect(() => resolved({ dbGroup: dbGroups })).toThrow("unknown key checks.dbGroup");
+  });
+
   it("strips the flags that make a pattern remember where it stopped", () => {
     const on = resolved({ dbGroups: { ...dbGroups, files: /\.db\.test\.ts$/g, declares: /^define/y } }).checks.dbGroups;
     expect(on?.files.flags).toBe("");
@@ -214,6 +229,9 @@ describe("the database groups check's switch", () => {
     [{ setup: "" }, "checks.dbGroups.setup must be a path"],
     [{ helpers: "src/test/" }, "checks.dbGroups.helpers must list folders"],
     [{ aliases: { "~/": 1 } }, "checks.dbGroups.aliases must map each prefix to a folder"],
+    [{ aliases: { "~/": "../src/" } }, "checks.dbGroups.aliases must map each prefix to a folder"],
+    [{ helpers: ["/abs/test/"] }, "checks.dbGroups.helpers must list folders"],
+    [{ helpers: ["./"] }, "checks.dbGroups.helpers must list folders"],
     [{ installs: ["a b"] }, "checks.dbGroups.installs must list names"],
     [{ collects: [1] }, "checks.dbGroups.collects must list names"],
     [{ ownList: "A.B" }, "checks.dbGroups.ownList must be a name"],
