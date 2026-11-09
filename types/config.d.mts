@@ -56,10 +56,27 @@ export const CONFIG_FILE: "checks.config.mjs";
  * @property {string[]} [roots] the folders they live under; `["src"]` by default
  */
 /**
+ * The database groups check, turned on: what is the app's own of it. The app's words reach the
+ * check only through here, so the package names none of them.
+ * @typedef {object} DbGroupsSwitch
+ * @property {string} lists the file the app's lists of files kept apart and run alone sit in; a finding names it
+ * @property {string} [setup] the one app module that may install at load: what the shared group's setup loads
+ * @property {string[]} [helpers] folders of test helpers, beyond `*.test.*` files and `__tests__/` folders
+ * @property {Record<string, string>} [aliases] an import's prefix and the folder it stands for, as `{ "~/": "src/" }`
+ * @property {string[]} [installs] methods that install what they are handed: a call to one changes global state
+ * @property {string[]} [collects] functions that collect from a list and install it: a call changes global state, but for `ownList`
+ * @property {string} [ownList] the app's own list, which the shared setup installs: collecting it changes nothing
+ * @property {string[]} [writes] `object.method` calls that write to a registry when handed what to keep, or called as a statement
+ * @property {RegExp} [declares] a call at load whose name matches only declares (adds to a registry, changes nothing there): harmless at load
+ * @property {RegExp} [files] which test files are database tests; `/\.db\.test\.ts$/` by default
+ * @property {string[]} [roots] the folders the check reads; `["src"]` by default
+ */
+/** @typedef {Required<Omit<DbGroupsSwitch, "setup" | "ownList" | "declares">> & { setup: string | null, ownList: string | null, declares: RegExp | null }} DbGroupsOn */
+/**
  * @typedef {object} ChecksConfig
  * @property {string} name lower-case letters, digits and dashes, starting with a letter
  * @property {string[]} [ratchets] globs of the tests that read the source as text and run whole
- * @property {{ dbTests?: DbTestsSwitch }} [checks] the package's checks this app turns on; each ships off
+ * @property {{ dbTests?: DbTestsSwitch, dbGroups?: DbGroupsSwitch }} [checks] the package's checks this app turns on; each ships off
  * @property {CheckConfig} check
  * @property {VerifyConfig} verify
  */
@@ -72,7 +89,7 @@ export const CONFIG_FILE: "checks.config.mjs";
  * @typedef {object} ResolvedConfig
  * @property {string} name
  * @property {string[]} ratchets
- * @property {{ dbTests: Required<DbTestsSwitch> | null }} checks
+ * @property {{ dbTests: Required<DbTestsSwitch> | null, dbGroups: DbGroupsOn | null }} checks
  * @property {{ requires: { path: string, message: string }[], steps: (Step | "tests")[], tests: { workerMemory: string, parentHeapMb: number } }} check
  * @property {{ first: Lane[], lanes: Lane[], chain: string, summary: RegExp }} verify
  * @property {string} gateFolder
@@ -169,6 +186,61 @@ export type DbTestsSwitch = {
      */
     roots?: string[] | undefined;
 };
+/**
+ * The database groups check, turned on: what is the app's own of it. The app's words reach the
+ * check only through here, so the package names none of them.
+ */
+export type DbGroupsSwitch = {
+    /**
+     * the file the app's lists of files kept apart and run alone sit in; a finding names it
+     */
+    lists: string;
+    /**
+     * the one app module that may install at load: what the shared group's setup loads
+     */
+    setup?: string | undefined;
+    /**
+     * folders of test helpers, beyond `*.test.*` files and `__tests__/` folders
+     */
+    helpers?: string[] | undefined;
+    /**
+     * an import's prefix and the folder it stands for, as `{ "~/": "src/" }`
+     */
+    aliases?: Record<string, string> | undefined;
+    /**
+     * methods that install what they are handed: a call to one changes global state
+     */
+    installs?: string[] | undefined;
+    /**
+     * functions that collect from a list and install it: a call changes global state, but for `ownList`
+     */
+    collects?: string[] | undefined;
+    /**
+     * the app's own list, which the shared setup installs: collecting it changes nothing
+     */
+    ownList?: string | undefined;
+    /**
+     * `object.method` calls that write to a registry when handed what to keep, or called as a statement
+     */
+    writes?: string[] | undefined;
+    /**
+     * a call at load whose name matches only declares (adds to a registry, changes nothing there): harmless at load
+     */
+    declares?: RegExp | undefined;
+    /**
+     * which test files are database tests; `/\.db\.test\.ts$/` by default
+     */
+    files?: RegExp | undefined;
+    /**
+     * the folders the check reads; `["src"]` by default
+     */
+    roots?: string[] | undefined;
+};
+export type DbGroupsOn = Required<Omit<DbGroupsSwitch, "setup" | "ownList" | "declares">> & {
+    setup: string | null;
+    ownList: string | null;
+    declares: RegExp | null;
+};
 export type ChecksConfig = {
     /**
      * lower-case letters, digits and dashes, starting with a letter
@@ -183,6 +255,7 @@ export type ChecksConfig = {
      */
     checks?: {
         dbTests?: DbTestsSwitch;
+        dbGroups?: DbGroupsSwitch;
     } | undefined;
     check: CheckConfig;
     verify: VerifyConfig;
@@ -199,6 +272,7 @@ export type ResolvedConfig = {
     ratchets: string[];
     checks: {
         dbTests: Required<DbTestsSwitch> | null;
+        dbGroups: DbGroupsOn | null;
     };
     check: {
         requires: {
