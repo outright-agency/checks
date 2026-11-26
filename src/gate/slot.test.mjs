@@ -61,7 +61,7 @@ describe("rerunCommand", () => {
     const other = { ...pnpm, npm_lifecycle_event: "check", npm_lifecycle_script: "pnpm lint && outright-checks check" };
     expect(rerunCommand({ argv: ["/n/node", "/repo/bin/outright-checks.mjs", "check"], env: other, cwd: "/repo", execPath: "/n/node" })).toEqual([
       "/n/node",
-      "bin/outright-checks.mjs",
+      join("bin", "outright-checks.mjs"),
       "check",
     ]);
     expect(rerunCommand({ argv: ["/n/node", script, "check"], env: {}, cwd: "/elsewhere", execPath: "/n/node" })).toEqual(["/n/node", script, "check"]);
