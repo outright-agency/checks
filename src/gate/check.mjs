@@ -20,7 +20,8 @@
 //
 // Each project still gets its own line, passed or FAILED.
 //
-// It takes no lock and leaves no receipt: it is not the gate. `outright-checks verify` is.
+// It takes no lock and leaves no receipt: it is not the gate. `outright-checks verify` is. Where the
+// machine has a slot service, it waits for one slot before its first step (slot.mjs).
 
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -29,6 +30,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { changedPaths, checkSteps, testStepResults } from "./lib.mjs";
 import { NO_SHELL, gateShell } from "./shell.mjs";
+import { takeSlot } from "./slot.mjs";
 
 /** @typedef {import("../config.mjs").ResolvedConfig} ResolvedConfig */
 /** @typedef {import("./lib.mjs").StepResult} StepResult */
@@ -60,6 +62,7 @@ export async function main({ cwd, config }) {
     console.log("[check] the repository has no commit yet: the check compares a change with one. Commit, then check again.");
     return 1;
   }
+  await takeSlot();
   const base = hasCommit(git, "HEAD~1") ? "HEAD~1" : "HEAD";
   const changed = changedPaths(git("diff", "--name-only", base), git("status", "--porcelain"));
 

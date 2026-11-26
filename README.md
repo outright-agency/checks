@@ -15,7 +15,7 @@ verify` before a change lands, a Vitest preset, and the CI steps. An app install
 pinned to a tag:
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.4.0
+pnpm add -D github:outright-agency/checks#v0.5.0
 ```
 
 and declares its own checks in `checks.config.mjs` at its root:
@@ -35,7 +35,7 @@ The sections below cover each part in full.
 ## Install
 
 ```bash
-pnpm add -D github:outright-agency/checks#v0.4.0
+pnpm add -D github:outright-agency/checks#v0.5.0
 ```
 
 - Node 22.12 or later: the package is ES modules only, and an app without `"type": "module"`
@@ -136,6 +136,22 @@ machine:
   lane stops no other, so a red verify takes as long as its longest lane, and Ctrl-C reaches the
   lanes through the console they share with the verify.
 - Under `CI` it runs `verify.chain` instead: a runner has no neighbours and no memory.
+
+**Heavy runs queue for a slot.** On a machine with a slot service (its client at
+`~/.system/bin/slot`), `check` waits for one slot before its first step and `verify` for every slot
+after its receipt check, in the one line every repository's heavy runs share: `slot status` shows
+the slots and the line, `slot mine` your own runs and their logs. An app's other heavy scripts take
+one through **`outright-checks slot [--all] -- <command…>`**:
+
+```json
+{ "scripts": { "test": "outright-checks slot -- vitest run", "build": "outright-checks slot -- next build" } }
+```
+
+All three run at once, as before, under `CI`, under a slot already (`SLOT_TICKET`, which a run
+under a slot passes on, so verify's lanes and a check's suite never ask twice), and wherever the
+client doesn't exist. `slot` also runs at once a command that names a test file
+(`pnpm test src/a.test.ts`): a single file takes no slot. A run under a slot writes its output to
+the slot's log and the client prints it, so it has no colours.
 
 ## The test runner's preset
 
@@ -450,7 +466,7 @@ steps:
   - uses: actions/checkout@v7
     with:
       fetch-depth: 2
-  - uses: outright-agency/checks/actions/ci-setup@v0.4.0
+  - uses: outright-agency/checks/actions/ci-setup@v0.5.0
     with:
       name: my-app
   - run: pnpm exec vitest run --project app --changed "$MY_APP_RATCHET_BASE_SHA"

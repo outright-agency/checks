@@ -21,6 +21,12 @@ export function cleanEnv(extra = {}) {
   /** @type {Record<string, string | undefined>} */
   const env = { ...process.env, ...extra };
   if (!("CI" in extra)) delete env.CI;
+  // No slot unless a test hands one in: no client, no ticket, and not the suite's own pnpm
+  // script, which the command would otherwise re-run as itself.
+  for (const name of ["SLOT_TICKET", "OUTRIGHT_CHECKS_UNDER_SLOT", "npm_lifecycle_event", "npm_lifecycle_script", "npm_config_user_agent"]) {
+    if (!(name in extra)) delete env[name];
+  }
+  if (!("OUTRIGHT_SLOT_CLIENT" in extra)) env.OUTRIGHT_SLOT_CLIENT = join(tmpdir(), "checks-no-slot-client");
   delete env.VITEST;
   delete env.VITEST_WORKER_ID;
   delete env.VITEST_POOL_ID;
