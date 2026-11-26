@@ -13,7 +13,9 @@
 //
 // A LOCK. Several sessions verifying at once on one machine slow every one of them down. A second
 // full verify waits for the first and says whom it is waiting on. The inner loop
-// (`outright-checks check`) never takes the lock.
+// (`outright-checks check`) never takes the lock. Where the machine has a slot service, a verify
+// with no receipt first waits for every slot (slot.mjs), so it runs alone on the machine; the lock
+// stays for every other machine.
 //
 // CI has neither: a runner has no neighbours and no memory. Under `CI` this runs the chain,
 // streamed.
@@ -44,6 +46,7 @@ import {
   receiptKey,
 } from "./lib.mjs";
 import { NO_SHELL, gateShell } from "./shell.mjs";
+import { takeSlot } from "./slot.mjs";
 
 /** @typedef {import("../config.mjs").ResolvedConfig} ResolvedConfig */
 /** @typedef {import("../config.mjs").Lane} Lane */
@@ -78,22 +81,25 @@ export async function main({ cwd, config, force = false }) {
   // A listener replaces Node's own exit on that signal, so with no lane running (waiting for the
   // lock, or between the lock and the lanes) the run ends here: a verify stopped while it waited
   // would otherwise keep polling, take the lock and run the whole gate for nobody. The lock, when
-  // this run holds it, is released on exit.
+  // this run holds it, is released on exit. The listeners start only once the run goes on here:
+  // while it waits for a slot, a Ctrl-C is the slot client's.
   /** @type {Set<ChildProcess>} */
   const children = new Set();
-  for (const [signal, exitCode] of Object.entries(SIGNAL_EXIT_CODES)) {
-    process.on(signal, () => {
-      if (children.size === 0) process.exit(exitCode);
-      if (!GROUPS) return; // Windows: the lanes share this console, and its Ctrl-C reached them too
-      for (const child of children) {
-        try {
-          process.kill(-(/** @type {number} */ (child.pid)), signal);
-        } catch {
-          // already gone
+  const forwardSignals = () => {
+    for (const [signal, exitCode] of Object.entries(SIGNAL_EXIT_CODES)) {
+      process.on(signal, () => {
+        if (children.size === 0) process.exit(exitCode);
+        if (!GROUPS) return; // Windows: the lanes share this console, and its Ctrl-C reached them too
+        for (const child of children) {
+          try {
+            process.kill(-(/** @type {number} */ (child.pid)), signal);
+          } catch {
+            // already gone
+          }
         }
-      }
-    });
-  }
+      });
+    }
+  };
 
   /**
    * @param {string} script
@@ -107,6 +113,7 @@ export async function main({ cwd, config, force = false }) {
   }
 
   if (process.env.CI) {
+    forwardSignals();
     return new Promise((resolveExit) => {
       spawnGrouped(config.verify.chain, "inherit").on("exit", (code, signal) =>
         resolveExit(signal ? 1 : (code ?? 1))
@@ -220,6 +227,9 @@ export async function main({ cwd, config, force = false }) {
     sayPassed(before);
     return 0;
   }
+  // A tree already verified takes no slot; any other waits here for every slot.
+  await takeSlot({ all: true });
+  forwardSignals();
   if (!before.clean) console.log("[verify] uncommitted changes — this run will not leave a receipt");
 
   await acquireLock(lockDir, cwd);

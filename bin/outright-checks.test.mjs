@@ -9,7 +9,7 @@ describe("outright-checks", () => {
     for (const args of [["lint"], [], ["verify", "--forcee"], ["check", "--force"]]) {
       const run = spawnSync(process.execPath, [BIN, ...args], { encoding: "utf8" });
       expect(run.status).toBe(2);
-      expect(run.stderr).toContain("usage: outright-checks <check | verify [--force]>");
+      expect(run.stderr).toContain("usage: outright-checks <check | verify [--force] | slot [--all] -- <command…>>");
     }
   });
 });

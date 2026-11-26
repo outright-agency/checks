@@ -1,15 +1,21 @@
 #!/usr/bin/env node
 // `outright-checks check` — the inner loop, after every task.
 // `outright-checks verify [--force]` — the full gate, once per tree and one at a time per machine.
+// `outright-checks slot [--all] -- <command…>` — a command under a slot (src/gate/slot.mjs).
 //
-// Both read the app's `checks.config.mjs` from the working directory. A mistake in it stops the
+// Where the machine has a slot service, check takes one slot and verify every slot. check and
+// verify read the app's `checks.config.mjs` from the working directory. A mistake in it stops the
 // command before anything runs, exit 2, naming the file and the key.
 
 import { CONFIG_FILE, ChecksConfigError, loadConfig } from "../src/config.mjs";
 
-const USAGE = "usage: outright-checks <check | verify [--force]>";
+const USAGE = "usage: outright-checks <check | verify [--force] | slot [--all] -- <command…>>";
 
 const [command, ...rest] = process.argv.slice(2);
+if (command === "slot") {
+  const { runUnderSlot } = await import("../src/gate/slot.mjs");
+  process.exit(await runUnderSlot(rest));
+}
 const known = command === "check" ? [] : command === "verify" ? ["--force"] : null;
 if (known === null || rest.some((argument) => !known.includes(argument))) {
   console.error(USAGE);

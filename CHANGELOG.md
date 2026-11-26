@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0
+
+Heavy runs queue for a slot. On a machine with a slot service (its client at
+`~/.system/bin/slot`), `check` waits for one slot and `verify` for every slot; anywhere else, and
+under `CI`, nothing changes.
+
+- `outright-checks check` takes one slot before its first step, and `outright-checks verify` every
+  slot after its receipt check, so a tree already verified waits for nothing. Each runs itself
+  again through the client, whose `slot ·` lines say where it waits; verify keeps its lock.
+- `outright-checks slot [--all] -- <command…>`, for an app's suites and build: the command under
+  one slot, or every slot with `--all`; at once when it names a test file.
+- All of them pass straight through under `CI`, under `SLOT_TICKET` (a run already under a slot),
+  and with no client.
+
 ## 0.4.0
 
 The database groups check, switched off. An app that raises its pin sees nothing turned on, and
